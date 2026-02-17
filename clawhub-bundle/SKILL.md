@@ -35,11 +35,19 @@ Tell the user the backup was saved locally, then ask:
 
 **Do not skip this step.** The skill is called cloud-backup — always offer cloud setup when it's missing.
 
-### Step 4: Report result and ensure scheduling
+### Step 4: Report result and offer scheduling
 
-Report the backup paths from the script output to the user.
+Report the backup paths from the script output to the user. Then check if a cron job already exists for cloud-backup:
 
-Then check if a daily cron job already exists for cloud-backup (`cron action=list`). If **no cron job exists**, create one automatically — don't ask, just do it and tell the user:
+```
+Use the cron tool: action=list
+```
+
+If no cron job mentions `cloud-backup`, offer to create one:
+
+> "Want me to schedule daily backups automatically (e.g. 2 AM)?"
+
+If user agrees, create the cron job:
 
 ```json
 {
@@ -49,11 +57,7 @@ Then check if a daily cron job already exists for cloud-backup (`cron action=lis
 }
 ```
 
-Default: **daily at 2 AM**. Use a different schedule only if the user explicitly asked for one.
-
-Tell the user: "Scheduled daily backup at 2 AM." (or whatever time was set).
-
-**Do not skip this step.** Every backup run must have a cron job behind it.
+**Do not skip the scheduling offer on first backup.**
 
 ---
 
