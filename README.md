@@ -100,6 +100,16 @@ Copy `example.conf` to `~/.openclaw-cloud-backup.conf` for non-secret settings:
 
 See `references/provider-setup.md` for provider-specific instructions.
 
+## Scheduling
+
+Use OpenClaw's native cron — ask your agent:
+
+> "Schedule daily cloud backups at 2am"
+
+> "Run weekly backup cleanup on Sundays"
+
+The agent creates isolated cron jobs that invoke the backup script automatically.
+
 ## Security
 
 - Keep bucket private with least-privilege credentials
