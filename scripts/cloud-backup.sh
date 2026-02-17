@@ -42,8 +42,22 @@ load_config() {
   : "${GPG_PASSPHRASE:=$(cfg env GPG_PASSPHRASE)}"
   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 
+  HAS_ACCESS_KEY=false
+  HAS_SECRET_KEY=false
+  HAS_KEY_PAIR=false
+  PARTIAL_KEYS=false
+  [ -n "$AWS_ACCESS_KEY_ID" ] && HAS_ACCESS_KEY=true
+  [ -n "$AWS_SECRET_ACCESS_KEY" ] && HAS_SECRET_KEY=true
+  if [ "$HAS_ACCESS_KEY" = "true" ] && [ "$HAS_SECRET_KEY" = "true" ]; then
+    HAS_KEY_PAIR=true
+  elif [ "$HAS_ACCESS_KEY" = "true" ] || [ "$HAS_SECRET_KEY" = "true" ]; then
+    PARTIAL_KEYS=true
+  fi
+
   CLOUD=false
-  [ -n "$BUCKET" ] && { [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$AWS_PROFILE" ]; } && has aws && CLOUD=true
+  if [ "$PARTIAL_KEYS" != "true" ] && [ -n "$BUCKET" ] && has aws && { [ -n "$AWS_PROFILE" ] || [ "$HAS_KEY_PAIR" = "true" ]; }; then
+    CLOUD=true
+  fi
 
   mkdir -p "$BACKUPS" "$BACKUPS/.tmp"
 }
@@ -84,11 +98,33 @@ tar_safe() {
   [ -z "$bad" ] || { echo "$bad" >&2; die "unsafe paths in archive"; }
 }
 
+safe_rm() {
+  local p
+  for p in "$@"; do
+    [ -n "$p" ] || continue
+    [ "$p" != "/" ] || die "refusing to delete root path"
+    rm -f "$p"
+  done
+}
+
 # List local archive files (sorted oldest first)
 local_archives() {
   for f in "$BACKUPS"/openclaw_*.tar.gz "$BACKUPS"/openclaw_*.tar.gz.gpg; do
     [ -f "$f" ] && echo "$f"
   done | sort
+}
+
+# List logical local backup sets (dedup tar/gpg variants), oldest first.
+local_backup_sets() {
+  local f stem ts
+  for f in "$BACKUPS"/openclaw_*.tar.gz "$BACKUPS"/openclaw_*.tar.gz.gpg; do
+    [ -f "$f" ] || continue
+    stem="${f%.gpg}"
+    stem="${stem%.tar.gz}"
+    ts="$(arc_ts "$stem")"
+    [ -n "$ts" ] || continue
+    printf '%s\t%s\n' "$ts" "$stem"
+  done | sort -u | cut -f2-
 }
 
 # Timestamp from archive filename → YYYYMMDDHHMMSS
@@ -119,7 +155,12 @@ cmd_backup() {
   tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}"
   payload="$arc"
 
-  [ "$ENCRYPT" = "true" ] && { need gpg; info "Encrypting"; payload="$(gpg_enc "$arc")"; }
+  if [ "$ENCRYPT" = "true" ]; then
+    need gpg
+    info "Encrypting"
+    payload="$(gpg_enc "$arc")"
+    safe_rm "$arc" "$arc.sha256"
+  fi
   sha_make "$payload"
 
   if [ "$UPLOAD" = "true" ] && [ "$CLOUD" = "true" ]; then
@@ -154,16 +195,20 @@ cmd_list() {
 cmd_cleanup() {
   local deleted=0
 
-  # Local: keep min(KEEP, MAX_LOCAL) newest archives
+  # Local: keep min(KEEP, MAX_LOCAL) newest logical backup sets
   local cap=$KEEP
   [ "$cap" -gt "$MAX_LOCAL" ] && cap=$MAX_LOCAL
-  local -a lf=()
-  while IFS= read -r f; do lf+=("$f"); done < <(local_archives)
-  if [ ${#lf[@]} -gt "$cap" ]; then
-    local n=$(( ${#lf[@]} - cap ))
-    info "Pruning $n local archive(s) (keep $cap)"
+  local -a sets=()
+  while IFS= read -r f; do sets+=("$f"); done < <(local_backup_sets)
+  if [ ${#sets[@]} -gt "$cap" ]; then
+    local n=$(( ${#sets[@]} - cap ))
+    info "Pruning $n local backup set(s) (keep $cap)"
+    local stem
     for ((i=0; i<n; i++)); do
-      rm -f "${lf[$i]}" "${lf[$i]}.sha256"
+      stem="${sets[$i]}"
+      safe_rm \
+        "$stem.tar.gz" "$stem.tar.gz.sha256" \
+        "$stem.tar.gz.gpg" "$stem.tar.gz.gpg.sha256"
       deleted=$((deleted + 1))
     done
   fi
@@ -222,11 +267,11 @@ cmd_restore() {
     info "Downloading s3://$BUCKET/$key"
     s3 cp "s3://$BUCKET/$key" "$src"
     s3 cp "s3://$BUCKET/$key.sha256" "$src.sha256"
-    sha_check "$src"
   else
     die "'$name' not found locally and cloud not configured"
   fi
 
+  sha_check "$src"
   local ext="$src"
   case "$src" in *.gpg) need gpg; info "Decrypting"; ext="$(gpg_dec "$src")" ;; esac
   tar_safe "$ext"
@@ -258,9 +303,11 @@ EOF
     echo ""
     echo "Cloud: bucket=$BUCKET  region=$REGION  endpoint=${ENDPOINT:-<default>}"
     if [ -n "$AWS_PROFILE" ]; then echo "Credentials: profile=$AWS_PROFILE"
-    elif [ -n "$AWS_ACCESS_KEY_ID" ]; then echo "Credentials: key=${AWS_ACCESS_KEY_ID:0:4}...${AWS_ACCESS_KEY_ID: -4}"
+    elif [ "$HAS_KEY_PAIR" = "true" ]; then echo "Credentials: key=${AWS_ACCESS_KEY_ID:0:4}...${AWS_ACCESS_KEY_ID: -4}"
+    elif [ "$PARTIAL_KEYS" = "true" ]; then echo "Credentials: partial key config (need ACCESS_KEY_ID + SECRET_ACCESS_KEY)"
     else echo "Credentials: <not set>"; fi
     echo "Cloud ready: $CLOUD"
+    [ "$PARTIAL_KEYS" = "true" ] && warn "Partial cloud credentials detected; set both ACCESS_KEY_ID and SECRET_ACCESS_KEY or use profile."
   else
     echo ""; echo "Mode: local-only"
   fi

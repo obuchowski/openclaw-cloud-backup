@@ -18,7 +18,7 @@ Set `config.encrypt=true` to GPG-encrypt archives before upload.
 ## Restore safety
 
 1. Always `restore --dry-run` first — lists contents without extracting.
-2. Archives are SHA-256 checksummed on create and verified on restore.
+2. Archives are SHA-256 checksummed on create and verified on restore (local and cloud).
 3. Tar paths are validated — absolute paths and `..` traversal are rejected.
 4. Non-interactive restore requires `--yes` (prevents accidental overwrites).
 
