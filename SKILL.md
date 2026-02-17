@@ -31,30 +31,35 @@ All configuration lives in OpenClaw config (`~/.openclaw/openclaw.json`):
 - Non-secrets under `skills.entries.cloud-backup.config.*`
 - Secrets under `skills.entries.cloud-backup.env.*`
 
-### Config keys
+### Config keys (`config.*`)
 
-| Key | Location | Default | Description |
-|-----|----------|---------|-------------|
-| `bucket` | `config` | *(required)* | S3 bucket name |
-| `region` | `config` | `us-east-1` | AWS region |
-| `endpoint` | `config` | *(none)* | Custom endpoint for non-AWS providers |
-| `awsProfile` | `config` | *(none)* | Named AWS profile (alternative to keys) |
-| `sourceRoot` | `config` | `~/.openclaw` | Directory to back up |
-| `localBackupDir` | `config` | `~/openclaw-cloud-backups` | Where local archives are stored |
-| `prefix` | `config` | `openclaw-backups/<hostname>/` | S3 key prefix (allows multi-device buckets) |
-| `upload` | `config` | `true` | Upload to cloud after local backup |
-| `encrypt` | `config` | `false` | Encrypt archives with GPG |
-| `retentionCount` | `config` | `10` | Keep at least N backups |
-| `retentionDays` | `config` | `30` | Delete backups older than N days |
+| Key | Default | Description |
+|-----|---------|-------------|
+| `bucket` | *(required)* | S3 bucket name |
+| `region` | `us-east-1` | AWS region |
+| `endpoint` | *(none)* | Custom endpoint for non-AWS providers |
+| `awsProfile` | *(none)* | Named AWS profile (alternative to keys) |
+| `upload` | `true` | Upload to cloud after local backup |
+| `encrypt` | `false` | Encrypt archives with GPG |
+| `retentionCount` | `10` | Keep at least N backups |
+| `retentionDays` | `30` | Delete backups older than N days |
 
-### Env keys (secrets)
+### Env keys (`env.*`) — secrets
 
-| Key | Location | Description |
-|-----|----------|-------------|
-| `AWS_ACCESS_KEY_ID` | `env` | Access key ID |
-| `AWS_SECRET_ACCESS_KEY` | `env` | Secret access key |
-| `AWS_SESSION_TOKEN` | `env` | Optional session token |
-| `GPG_PASSPHRASE` | `env` | For client-side encryption |
+| Key | Description |
+|-----|-------------|
+| `AWS_ACCESS_KEY_ID` | Access key ID |
+| `AWS_SECRET_ACCESS_KEY` | Secret access key |
+| `AWS_SESSION_TOKEN` | Optional session token |
+| `GPG_PASSPHRASE` | For client-side encryption |
+
+### Derived automatically (no config needed)
+
+| Value | Source |
+|-------|--------|
+| Source directory | `dirname` of OpenClaw config path (`~/.openclaw`) |
+| Local backup dir | `<sourceRoot>/backups` |
+| S3 prefix | `openclaw-backups/<hostname>/` |
 
 ### Agent-assisted setup (recommended)
 
@@ -76,10 +81,6 @@ openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..
 
 # Non-AWS providers — also set endpoint:
 openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'
-
-# Optional behavior overrides:
-openclaw config patch 'skills.entries.cloud-backup.config.upload=false'
-openclaw config patch 'skills.entries.cloud-backup.config.retentionCount=20'
 ```
 
 ### Verify setup
@@ -118,8 +119,6 @@ Use OpenClaw's native cron for automated backups. User can customize:
 > "Schedule daily cloud backups at 2am"
 
 > "Schedule weekly backup cleanup on Sundays at 3am"
-
-The agent will create cron jobs that run the backup script. Example job configurations:
 
 **Daily full backup at 02:00:**
 ```json

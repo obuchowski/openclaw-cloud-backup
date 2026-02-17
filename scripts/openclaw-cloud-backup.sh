@@ -152,14 +152,13 @@ load_config() {
   REGION="${REGION:-us-east-1}"
   ENDPOINT="$(read_config "endpoint")"
 
+  # Derived paths — no config keys needed
+  SOURCE_ROOT="$(dirname "$OPENCLAW_CONFIG")"
+  LOCAL_BACKUP_DIR="$SOURCE_ROOT/backups"
+  TMP_DIR="$SOURCE_ROOT/backups/.tmp"
+  PREFIX="openclaw-backups/$(hostname -s 2>/dev/null || hostname)/"
+
   # Behavior settings from openclaw config (with defaults)
-  SOURCE_ROOT="$(read_config "sourceRoot")"
-  SOURCE_ROOT="${SOURCE_ROOT:-$HOME/.openclaw}"
-  LOCAL_BACKUP_DIR="$(read_config "localBackupDir")"
-  LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/openclaw-cloud-backups}"
-  TMP_DIR="$HOME/.openclaw-cloud-backup/tmp"
-  PREFIX="$(read_config "prefix")"
-  PREFIX="${PREFIX:-openclaw-backups/$(hostname -s 2>/dev/null || hostname)/}"
   UPLOAD="$(normalize_bool "$(read_config "upload")")"
   # Default upload to true when not set
   if [ -z "$(read_config "upload")" ]; then
@@ -694,9 +693,12 @@ cmd_status() {
     printf "  No credentials configured\n"
   fi
 
-  printf "\n%sBehavior:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "\n%sPaths (derived):%s\n" "$COLOR_BLUE" "$COLOR_RESET"
   printf "  sourceRoot: %s\n" "$SOURCE_ROOT"
   printf "  localBackupDir: %s\n" "$LOCAL_BACKUP_DIR"
+  printf "  prefix: %s\n" "$PREFIX"
+
+  printf "\n%sBehavior:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
   printf "  upload: %s\n" "$UPLOAD"
   printf "  encrypt: %s\n" "$ENCRYPT"
   printf "  retentionCount: %s\n" "$RETENTION_COUNT"
@@ -771,13 +773,14 @@ cmd_setup() {
   printf "  • region           - AWS region (default: us-east-1)\n"
   printf "  • endpoint         - Custom endpoint for non-AWS providers\n"
   printf "  • awsProfile       - Named AWS profile (alternative to keys)\n"
-  printf "  • sourceRoot       - Directory to back up (default: ~/.openclaw)\n"
-  printf "  • localBackupDir   - Local archive dir (default: ~/openclaw-cloud-backups)\n"
-  printf "  • prefix           - S3 key prefix (default: openclaw-backups/<hostname>/)\n"
   printf "  • upload           - Upload to cloud (default: true)\n"
   printf "  • encrypt          - GPG encrypt (default: false)\n"
   printf "  • retentionCount   - Keep N backups (default: 10)\n"
   printf "  • retentionDays    - Delete after N days (default: 30)\n"
+  printf "\nDerived automatically:\n"
+  printf "  • sourceRoot       - from OpenClaw config path (dirname)\n"
+  printf "  • localBackupDir   - <sourceRoot>/backups\n"
+  printf "  • prefix           - openclaw-backups/<hostname>/\n"
 
   printf "\nSecrets (skills.entries.cloud-backup.env.*):\n"
   printf "  • AWS_ACCESS_KEY_ID\n"

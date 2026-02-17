@@ -72,13 +72,12 @@ All settings live in `skills.entries.cloud-backup` in OpenClaw config.
 | `region` | `us-east-1` | AWS region |
 | `endpoint` | *(none)* | Custom endpoint for non-AWS providers |
 | `awsProfile` | *(none)* | Named AWS profile (alternative to keys) |
-| `sourceRoot` | `~/.openclaw` | Directory to back up |
-| `localBackupDir` | `~/openclaw-cloud-backups` | Local archive storage |
-| `prefix` | `openclaw-backups/<hostname>/` | S3 key prefix |
 | `upload` | `true` | Upload to cloud after backup |
 | `encrypt` | `false` | GPG encrypt archives |
 | `retentionCount` | `10` | Keep N most recent backups |
 | `retentionDays` | `30` | Delete backups older than N days |
+
+Source directory, local backup path, and S3 prefix are derived automatically from the OpenClaw config path and hostname — no configuration needed.
 
 ### Secrets (`env.*`)
 
