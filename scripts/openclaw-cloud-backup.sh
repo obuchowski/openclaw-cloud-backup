@@ -6,7 +6,7 @@ SCRIPT_NAME="$(basename "$0")"
 CONFIG_FILE="${OPENCLAW_BACKUP_CONFIG:-$HOME/.openclaw-cloud-backup.conf}"
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 LOCK_DIR="${TMPDIR:-/tmp}/openclaw-cloud-backup.lock"
-SKILL_CONFIG_PATH="skills.cloud-backup"
+SKILL_CONFIG_PATH="skills.entries.cloud-backup"
 
 COLOR_RED=""
 COLOR_GREEN=""
@@ -118,7 +118,6 @@ acquire_lock() {
 # Returns empty string if not found or jq unavailable
 read_openclaw_config() {
   local key="$1"
-  local full_path=".${SKILL_CONFIG_PATH}.${key}"
 
   if ! command -v jq >/dev/null 2>&1; then
     printf ""
@@ -130,7 +129,7 @@ read_openclaw_config() {
     return 0
   fi
 
-  jq -r "${full_path} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+  jq -r ".skills.entries[\"cloud-backup\"].${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
 }
 
 load_config() {

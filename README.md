@@ -25,13 +25,13 @@ Secrets are stored in OpenClaw config (`~/.openclaw/openclaw.json`).
 
 **Or manually:**
 ```bash
-openclaw config patch 'skills.cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.cloud-backup.awsSecretAccessKey="..."'
+openclaw config patch 'skills.entries.cloud-backup.bucket="my-bucket"'
+openclaw config patch 'skills.entries.cloud-backup.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId="AKIA..."'
+openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey="..."'
 
 # For non-AWS providers:
-openclaw config patch 'skills.cloud-backup.endpoint="https://..."'
+openclaw config patch 'skills.entries.cloud-backup.endpoint="https://..."'
 ```
 
 ### 2. Verify setup
@@ -64,7 +64,7 @@ bash scripts/openclaw-cloud-backup.sh list
 
 ### Secrets (OpenClaw config)
 
-Stored at `skills.cloud-backup.*`:
+Stored at `skills.entries.cloud-backup.*`:
 
 | Key | Description |
 |-----|-------------|

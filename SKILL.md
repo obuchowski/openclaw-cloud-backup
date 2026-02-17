@@ -26,7 +26,7 @@ Back up OpenClaw configuration locally, with optional sync to S3-compatible clou
 
 ## Setup
 
-Secrets are stored in OpenClaw config at `skills.cloud-backup.*`:
+Secrets are stored in OpenClaw config at `skills.entries.cloud-backup.*`:
 
 ```
 bucket              - S3 bucket name (required)
@@ -49,13 +49,13 @@ The agent will run `gateway config.patch` to store credentials securely.
 
 ```bash
 # Store secrets in OpenClaw config
-openclaw config patch 'skills.cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.cloud-backup.awsSecretAccessKey="..."'
+openclaw config patch 'skills.entries.cloud-backup.bucket="my-bucket"'
+openclaw config patch 'skills.entries.cloud-backup.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId="AKIA..."'
+openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey="..."'
 
 # For non-AWS providers, also set endpoint:
-openclaw config patch 'skills.cloud-backup.endpoint="https://..."'
+openclaw config patch 'skills.entries.cloud-backup.endpoint="https://..."'
 ```
 
 ### Local settings (optional)
@@ -130,7 +130,7 @@ For local-only backups, set `UPLOAD=false` in the message or config.
 Settings are loaded in this order (first wins):
 
 1. **Environment variables** — for CI/automation
-2. **OpenClaw config** — `skills.cloud-backup.*` (recommended)
+2. **OpenClaw config** — `skills.entries.cloud-backup.*` (recommended)
 3. **Local config file** — `~/.openclaw-cloud-backup.conf` (legacy/fallback)
 
 ## Security
