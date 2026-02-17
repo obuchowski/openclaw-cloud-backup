@@ -27,17 +27,29 @@ Back up OpenClaw configuration locally, with optional sync to S3-compatible clou
 
 ## Setup
 
-Secrets are stored in OpenClaw config at `skills.entries.cloud-backup.*`:
+Secrets/config are stored in OpenClaw config.
+
+**Recommended (schema-safe) layout:**
+- Non-secrets under `skills.entries.cloud-backup.config.*`
+- Secrets under `skills.entries.cloud-backup.env.*`
+
+Supported keys:
 
 ```
-bucket              - S3 bucket name (required)
-region              - AWS region (default: us-east-1)
-endpoint            - Custom endpoint for non-AWS providers
-awsAccessKeyId      - Access key ID
-awsSecretAccessKey  - Secret access key
-awsProfile          - Named AWS profile (alternative to keys)
-gpgPassphrase       - For client-side encryption (optional)
+config.bucket              - S3 bucket name (required)
+config.region              - AWS region (default: us-east-1)
+config.endpoint            - Custom endpoint for non-AWS providers
+config.awsProfile          - Named AWS profile (alternative to keys)
+
+env.AWS_ACCESS_KEY_ID      - Access key ID
+env.AWS_SECRET_ACCESS_KEY  - Secret access key
+env.AWS_SESSION_TOKEN      - Optional session token
+env.GPG_PASSPHRASE         - For client-side encryption (optional)
 ```
+
+**Legacy layout (still supported by the script):**
+- `skills.entries.cloud-backup.bucket`, `region`, `endpoint`, `awsAccessKeyId`, `awsSecretAccessKey`, …
+
 
 ### Agent-assisted setup (recommended)
 
@@ -49,14 +61,14 @@ The agent will run `gateway config.patch` to store credentials securely.
 ### Manual setup
 
 ```bash
-# Store secrets in OpenClaw config
-openclaw config patch 'skills.entries.cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.entries.cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey="..."'
+# Store settings in OpenClaw config (schema-safe)
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="my-bucket"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="AKIA..."'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..."'
 
 # For non-AWS providers, also set endpoint:
-openclaw config patch 'skills.entries.cloud-backup.endpoint="https://..."'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'
 ```
 
 ### Local settings (optional)
