@@ -8,6 +8,20 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 Back up `~/.openclaw` locally, with optional upload to any S3-compatible storage.
 
+## First run (agent onboarding)
+
+When the user asks to set up or use cloud-backup and no `bucket` is configured yet:
+
+1. **Ask which provider** they want to use: AWS S3, Cloudflare R2, Backblaze B2, MinIO, or DigitalOcean Spaces.
+2. **Read the matching provider guide** from `references/providers/` — it has the exact config keys, endpoint format, and credential steps for that provider.
+3. **Ask for credentials** — bucket name, access key, secret key, and endpoint (if non-AWS). Walk them through it if needed.
+4. **Write config** via `gateway config.patch` — only the values they provided. Don't write defaults.
+5. **Run `status`** to verify, then **run `backup full`** as a first test.
+6. **Offer to schedule daily backups** if the first backup succeeds.
+7. **Ask if they want to change any defaults** (upload, encrypt, retention). Only if they say yes — don't dump the full config table on them unprompted.
+
+If the user says "set up cloud backup" without specifying a provider, ask. Don't guess.
+
 ## Config
 
 All settings live in `skills.entries.cloud-backup` in OpenClaw config.
