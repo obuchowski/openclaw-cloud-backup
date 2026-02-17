@@ -20,11 +20,27 @@ bash "{baseDir}/scripts/cloud-backup.sh" backup full
 
 Default mode is `full`. Only use `skills` or `settings` if the user specifically asks.
 
-### Step 2: Check script output for warnings
+### Step 2: Check if encryption is configured
 
-Look at the script output. If it contains `WARN: Cloud storage is not configured`, go to **Step 3**. Otherwise go to **Step 4**.
+Check if `config.encrypt` is `true` in the skill config. If it is, skip to **Step 3**.
 
-### Step 3: Cloud not configured — ask user to set it up
+If encryption is NOT enabled, ask the user:
+
+> "Your backups are not encrypted. Archives contain config, credentials, and API keys in cleartext. Want to set a passphrase? (AES-256, just the passphrase needed to restore — no key files.)"
+
+- If user provides a passphrase → write both via `gateway config.patch`:
+  - `skills.entries.cloud-backup.config.encrypt = true`
+  - `skills.entries.cloud-backup.env.GPG_PASSPHRASE = "<passphrase>"`
+  Then re-run the backup so the archive is encrypted.
+- If user says no / skip → continue to Step 3. **Ask again next time.**
+
+**Do not skip this step.** Ask every time encryption is off. Backups contain secrets.
+
+### Step 3: Check script output for warnings
+
+Look at the script output. If it contains `WARN: Cloud storage is not configured`, go to **Step 4**. Otherwise go to **Step 5**.
+
+### Step 4: Cloud not configured — ask user to set it up
 
 Tell the user the backup was saved locally, then ask:
 
@@ -35,7 +51,7 @@ Tell the user the backup was saved locally, then ask:
 
 **Do not skip this step.** The skill is called cloud-backup — always offer cloud setup when it's missing.
 
-### Step 4: Report result and ensure scheduling
+### Step 5: Report result and ensure scheduling
 
 Report the backup paths from the script output to the user.
 
