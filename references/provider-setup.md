@@ -141,9 +141,9 @@ openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<s
 ## Verify
 
 ```bash
-bash scripts/openclaw-cloud-backup.sh status
-bash scripts/openclaw-cloud-backup.sh backup full
-bash scripts/openclaw-cloud-backup.sh list
+bash scripts/cloud-backup.sh status
+bash scripts/cloud-backup.sh backup full
+bash scripts/cloud-backup.sh list
 ```
 
 If backup or list fails, see `references/security-troubleshooting.md`.

@@ -11,7 +11,7 @@ Install as an OpenClaw skill from [ClawHub](https://clawhub.com) or copy the `cl
 ## Prerequisites
 
 - `bash`, `tar`, `jq`
-- `aws` CLI v2 ([install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+- `aws` CLI v1 or v2 ([install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
 - `gpg` (optional, for encryption)
 
 ## Quick Start
@@ -37,15 +37,15 @@ openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."
 ### 2. Verify
 
 ```bash
-bash scripts/openclaw-cloud-backup.sh setup
-bash scripts/openclaw-cloud-backup.sh status
+bash scripts/cloud-backup.sh setup
+bash scripts/cloud-backup.sh status
 ```
 
 ### 3. First backup
 
 ```bash
-bash scripts/openclaw-cloud-backup.sh backup full
-bash scripts/openclaw-cloud-backup.sh list
+bash scripts/cloud-backup.sh backup full
+bash scripts/cloud-backup.sh list
 ```
 
 ## Commands
@@ -121,7 +121,8 @@ The agent creates isolated cron jobs that invoke the backup script automatically
 ├── SKILL.md                 # Skill definition (bundled)
 ├── README.md                # This file (GitHub only)
 ├── scripts/
-│   └── openclaw-cloud-backup.sh
+│   └── cloud-backup.sh
+
 ├── references/
 │   ├── provider-setup.md
 │   └── security-troubleshooting.md

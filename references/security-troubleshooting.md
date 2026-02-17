@@ -39,7 +39,7 @@ Before restore:
 
 1. Run dry-run:
    ```bash
-   bash scripts/openclaw-cloud-backup.sh restore <backup-name> --dry-run
+   bash scripts/cloud-backup.sh restore <backup-name> --dry-run
    ```
 2. Confirm target directory (`sourceRoot`) is correct.
 3. Confirm backup date and host are expected.
@@ -58,7 +58,7 @@ After restore:
 - Check `skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` are set.
 - Re-run:
   ```bash
-  bash scripts/openclaw-cloud-backup.sh status
+  bash scripts/cloud-backup.sh status
   ```
 
 ### `AccessDenied` on upload/list/delete
