@@ -128,6 +128,9 @@ cmd_backup() {
     s3 cp "$payload.sha256" "s3://$BUCKET/$PREFIX$(basename "$payload").sha256"
     info "Backup complete: $payload"
     info "Uploaded to: s3://$BUCKET/$PREFIX$(basename "$payload")"
+  elif [ "$UPLOAD" != "false" ] && [ "$CLOUD" != "true" ]; then
+    info "Backup complete: $payload"
+    warn "Cloud storage is not configured — backup is local only."
   else
     info "Backup complete: $payload"
   fi

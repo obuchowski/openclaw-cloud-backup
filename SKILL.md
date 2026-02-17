@@ -1,6 +1,6 @@
 ---
 name: cloud-backup
-description: Back up and restore OpenClaw state. Creates local archives and optionally uploads to S3-compatible cloud storage. Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
+description: Back up and restore OpenClaw state. Creates local archives and uploads to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
 metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","aws"]}}}
 ---
 
@@ -8,11 +8,7 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 ## What this does
 
-Backs up the OpenClaw state. That's it. Don't ask the user *what* to back up.
-
-- **Local archive** is always created (path shown in script output)
-- **Cloud upload** happens automatically if configured (bucket + credentials exist)
-- **Default mode is `full`** — just run it. Only use `skills` or `settings` mode if the user specifically asks.
+Backs up OpenClaw state to a local archive and uploads it to cloud storage. Don't ask the user *what* to back up — just run it.
 
 ## How to run a backup
 
@@ -20,23 +16,40 @@ Backs up the OpenClaw state. That's it. Don't ask the user *what* to back up.
 bash "{baseDir}/scripts/cloud-backup.sh" backup full
 ```
 
-After it finishes, tell the user:
-- Report the local path and cloud URL from the script output
-- If cloud is NOT configured: don't mention cloud at all
+Default mode is `full`. Only use `skills` or `settings` if the user specifically asks.
 
-**Do not ask** where to store the backup. Do not ask what to back up. Do not offer choices about destinations. Just run it.
+**Do not ask** where to store it, what to back up, or anything about destinations. Just run the command.
 
-## First run (setup)
+### After backup completes
 
-Only when `backup` fails because cloud isn't configured AND `upload=true` (default):
+Report the output from the script. Then:
 
-1. **Ask: local-only or cloud?**
-   - **Local-only**: set `config.upload=false` via `gateway config.patch`. Done.
-   - **Cloud**: ask which provider (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or other).
+- **Cloud configured** → backup is local + uploaded. Done.
+- **Cloud NOT configured** → backup is local only. Prompt the user: "Backup saved locally. Want to set up cloud storage so backups are also uploaded offsite? I support AWS S3, Cloudflare R2, Backblaze B2, MinIO, and DigitalOcean Spaces."
+- **Cloud configured but upload failed** → report the error and the local backup path.
+
+## Cloud setup
+
+When the user agrees to set up cloud (either from the prompt above or explicitly):
+
+1. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or other.
 2. **Read the matching provider guide** from `references/providers/` for endpoint, region, and credential details.
 3. **Collect and write config** via `gateway config.patch` — bucket, credentials, endpoint (if non-AWS).
-4. **Run the backup again.**
-5. **Offer to schedule daily backups** if the first backup succeeds.
+4. **Run `status`** to verify, then re-run backup.
+
+If the user explicitly says they only want local backups, set `config.upload=false`.
+
+## After first successful cloud backup
+
+Offer to schedule daily backups if no cron job exists for this skill:
+
+```json
+{
+  "schedule": { "kind": "cron", "expr": "0 2 * * *" },
+  "payload": { "kind": "agentTurn", "message": "Run cloud-backup: backup full" },
+  "sessionTarget": "isolated"
+}
+```
 
 ## Commands
 
@@ -47,10 +60,10 @@ bash "{baseDir}/scripts/cloud-backup.sh" <command>
 | Command | What it does |
 |---------|-------------|
 | `backup [full\|skills\|settings]` | Create archive + upload if configured. Default: `full` |
-| `list` | Show local archives + remote backups (if cloud configured) |
+| `list` | Show local + remote backups |
 | `restore <name> [--dry-run] [--yes]` | Restore from local or cloud. Always `--dry-run` first |
-| `cleanup` | Prune old archives (local: keep min(N, 7); cloud: count + age) |
-| `status` | Show current config, paths, and dependency check |
+| `cleanup` | Prune old archives (local: capped at 7; cloud: count + age) |
+| `status` | Show current config and dependency check |
 
 ## Config reference
 
@@ -88,18 +101,6 @@ Read the relevant one only during setup:
 - `references/providers/minio.md`
 - `references/providers/digitalocean-spaces.md`
 - `references/providers/other.md` — any S3-compatible service
-
-## Scheduling
-
-After first successful backup, offer to schedule daily backups:
-
-```json
-{
-  "schedule": { "kind": "cron", "expr": "0 2 * * *" },
-  "payload": { "kind": "agentTurn", "message": "Run cloud-backup: backup full" },
-  "sessionTarget": "isolated"
-}
-```
 
 ## Security
 
