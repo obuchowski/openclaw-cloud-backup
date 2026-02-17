@@ -6,21 +6,21 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 # OpenClaw Cloud Backup
 
-Back up `~/.openclaw` locally, with optional upload to any S3-compatible storage.
+Back up `~/.openclaw` to local archives, with optional upload to any S3-compatible storage. Works as a local-only backup tool when `upload=false`.
 
 ## First run (agent onboarding)
 
 When the user asks to set up or use cloud-backup and no `bucket` is configured yet:
 
-1. **Ask which provider** they want to use: AWS S3, Cloudflare R2, Backblaze B2, MinIO, or DigitalOcean Spaces.
-2. **Read the matching provider guide** from `references/providers/` — it has the exact config keys, endpoint format, and credential steps for that provider.
-3. **Ask for credentials** — bucket name, access key, secret key, and endpoint (if non-AWS). Walk them through it if needed.
-4. **Write config** via `gateway config.patch` — only the values they provided. Don't write defaults.
-5. **Run `status`** to verify, then **run `backup full`** as a first test.
+1. **Ask: local-only or cloud?** The script always creates local archives under `~/.openclaw/backups/`. Cloud upload is optional.
+   - **Local-only**: set `config.upload=false`. No provider, credentials, or `aws` CLI needed. Skip to step 5.
+   - **Cloud**: continue to step 2.
+2. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, or DigitalOcean Spaces. Don't guess — ask.
+3. **Read the matching provider guide** from `references/providers/` — it has the exact config keys, endpoint format, and credential steps.
+4. **Collect and write config** — bucket name, credentials, endpoint (if non-AWS). Write via `gateway config.patch`. Only set what they provided — don't write defaults.
+5. **Test**: run `status`, then `backup full`.
 6. **Offer to schedule daily backups** if the first backup succeeds.
-7. **Ask if they want to change any defaults** (upload, encrypt, retention). Only if they say yes — don't dump the full config table on them unprompted.
-
-If the user says "set up cloud backup" without specifying a provider, ask. Don't guess.
+7. **Offer to review defaults** (encrypt, retention) — only if they want to, don't dump the config table unprompted.
 
 ## Config
 
