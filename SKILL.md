@@ -47,8 +47,7 @@ env.AWS_SESSION_TOKEN      - Optional session token
 env.GPG_PASSPHRASE         - For client-side encryption (optional)
 ```
 
-**Legacy layout (still supported by the script):**
-- `skills.entries.cloud-backup.bucket`, `region`, `endpoint`, `awsAccessKeyId`, `awsSecretAccessKey`, …
+(Legacy config layout removed — use `skills.entries.cloud-backup.config.*` + `skills.entries.cloud-backup.env.*`.)
 
 
 ### Agent-assisted setup (recommended)

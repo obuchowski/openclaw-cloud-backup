@@ -115,11 +115,9 @@ acquire_lock() {
 }
 
 # Read a value from OpenClaw config using jq.
-# Supports both:
-# - New schema-safe layout:
-#   skills.entries.cloud-backup.config.* (non-secrets)
-#   skills.entries.cloud-backup.env.*    (secrets)
-# - Legacy layout (older skill versions): skills.entries.cloud-backup.*
+# Schema-safe layout only:
+# - Non-secrets: skills.entries.cloud-backup.config.*
+# - Secrets:     skills.entries.cloud-backup.env.*
 # Returns empty string if not found or jq unavailable.
 read_openclaw_config() {
   local key="$1"
@@ -136,22 +134,22 @@ read_openclaw_config() {
 
   case "$key" in
     awsAccessKeyId)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_ACCESS_KEY_ID // .skills.entries["cloud-backup"].config.awsAccessKeyId // .skills.entries["cloud-backup"].awsAccessKeyId // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r '.skills.entries["cloud-backup"].env.AWS_ACCESS_KEY_ID // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
     awsSecretAccessKey)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_SECRET_ACCESS_KEY // .skills.entries["cloud-backup"].config.awsSecretAccessKey // .skills.entries["cloud-backup"].awsSecretAccessKey // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r '.skills.entries["cloud-backup"].env.AWS_SECRET_ACCESS_KEY // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
     awsSessionToken)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_SESSION_TOKEN // .skills.entries["cloud-backup"].config.awsSessionToken // .skills.entries["cloud-backup"].awsSessionToken // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r '.skills.entries["cloud-backup"].env.AWS_SESSION_TOKEN // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
     awsProfile)
-      jq -r '.skills.entries["cloud-backup"].config.awsProfile // .skills.entries["cloud-backup"].awsProfile // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r '.skills.entries["cloud-backup"].config.awsProfile // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
     gpgPassphrase)
-      jq -r '.skills.entries["cloud-backup"].env.GPG_PASSPHRASE // .skills.entries["cloud-backup"].config.gpgPassphrase // .skills.entries["cloud-backup"].gpgPassphrase // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r '.skills.entries["cloud-backup"].env.GPG_PASSPHRASE // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
     *)
-      jq -r ".skills.entries[\"cloud-backup\"].config.${key} // .skills.entries[\"cloud-backup\"].${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+      jq -r ".skills.entries[\"cloud-backup\"].config.${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
       ;;
   esac
 }
