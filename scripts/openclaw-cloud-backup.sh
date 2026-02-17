@@ -723,16 +723,26 @@ cmd_status() {
   printf "  RETENTION_DAYS: %s\n" "$RETENTION_DAYS"
 
   printf "\n%sDependencies:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
-  for bin_name in bash tar aws jq; do
+  for bin_name in bash tar jq; do
     if command -v "$bin_name" >/dev/null 2>&1; then
       printf "  %-8s: found\n" "$bin_name"
     else
       printf "  %-8s: missing\n" "$bin_name"
-      if [ "$bin_name" != "jq" ]; then
-        missing=1
-      fi
+      missing=1
     fi
   done
+
+  # aws is optional for local-only backups
+  if command -v aws >/dev/null 2>&1; then
+    printf "  %-8s: found\n" "aws"
+  else
+    if [ "$UPLOAD" = "true" ]; then
+      printf "  %-8s: missing (required for UPLOAD=true)\n" "aws"
+      missing=1
+    else
+      printf "  %-8s: not found (optional, needed for cloud sync)\n" "aws"
+    fi
+  fi
 
   if [ "$ENCRYPT" = "true" ]; then
     if command -v gpg >/dev/null 2>&1; then
@@ -752,10 +762,14 @@ cmd_status() {
     printf "\n%s[WARN]%s One or more required binaries are missing.\n" "$COLOR_YELLOW" "$COLOR_RESET"
   fi
 
-  if [ -z "$BUCKET" ]; then
-    printf "\n%s[WARN]%s BUCKET not configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
-  elif [ "$creds_source" = "none" ]; then
-    printf "\n%s[WARN]%s No credentials configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+  if [ "$UPLOAD" = "true" ]; then
+    if [ -z "$BUCKET" ]; then
+      printf "\n%s[WARN]%s BUCKET not configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+    elif [ "$creds_source" = "none" ]; then
+      printf "\n%s[WARN]%s No credentials configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+    fi
+  else
+    printf "\n%s[INFO]%s UPLOAD=false. Local backups only (no cloud sync).\n" "$COLOR_BLUE" "$COLOR_RESET"
   fi
 }
 

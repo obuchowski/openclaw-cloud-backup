@@ -1,17 +1,23 @@
 ---
 name: openclaw-cloud-backup
 description: Back up and restore OpenClaw configuration to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use for local backups, cloud upload, restore, and retention cleanup.
-metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","aws","jq"]}}}
+metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq"]}}}
 ---
 
 # OpenClaw Cloud Backup
 
-Back up OpenClaw configuration to any S3-compatible storage.
+Back up OpenClaw configuration locally, with optional sync to S3-compatible cloud storage.
 
 ## Requirements
 
-- **Binaries:** `bash`, `tar`, `aws` (AWS CLI v2), `jq`
-- **Optional:** `gpg` (if encryption enabled)
+**Local backups:**
+- `bash`, `tar`, `jq`
+
+**Cloud sync** (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces):
+- `aws` CLI v2 — required for upload/download/list/restore from cloud
+
+**Optional:**
+- `gpg` — for client-side encryption
 
 ## References
 
