@@ -211,28 +211,63 @@ cmd_list() {
   fi
 }
 
+# Compute age cutoff timestamp (YYYYMMDDHHMMSS) for retention days.
+# Returns empty if date math isn't available.
+age_cutoff() {
+  local days="$1"
+  [ "$days" -gt 0 ] 2>/dev/null || return 0
+  if date -d "now" >/dev/null 2>&1; then
+    date -d "$days days ago" +%Y%m%d%H%M%S
+  elif date -v-1d >/dev/null 2>&1; then
+    date -v-${days}d +%Y%m%d%H%M%S
+  fi
+}
+
+# Extract timestamp from archive filename → YYYYMMDDHHMMSS
+archive_ts() {
+  basename "$1" | sed -n 's/.*_\([0-9]\{8\}_[0-9]\{6\}\)_.*/\1/p' | tr -d _
+}
+
 cmd_cleanup() {
   local deleted=0
 
-  # Local cleanup by count
+  # --- Local cleanup ---
   local -a local_files=()
   for f in "$BACKUP_DIR"/openclaw_*.tar.gz "$BACKUP_DIR"/openclaw_*.tar.gz.gpg; do
     [ -f "$f" ] && local_files+=("$f")
   done
 
-  local local_total=${#local_files[@]}
-  if [ "$local_total" -gt "$RETENTION_COUNT" ]; then
-    # Sort oldest first (filenames contain timestamps)
+  if [ ${#local_files[@]} -gt 0 ]; then
     IFS=$'\n' local_files=($(printf "%s\n" "${local_files[@]}" | sort)); unset IFS
-    local excess=$((local_total - RETENTION_COUNT))
-    info "Pruning $excess local archive(s) (keep $RETENTION_COUNT)"
-    for ((i=0; i<excess; i++)); do
-      rm -f "${local_files[$i]}" "${local_files[$i]}.sha256"
-      ((deleted++))
-    done
+
+    # By count
+    if [ ${#local_files[@]} -gt "$RETENTION_COUNT" ]; then
+      local excess=$(( ${#local_files[@]} - RETENTION_COUNT ))
+      info "Pruning $excess local archive(s) (keep $RETENTION_COUNT)"
+      for ((i=0; i<excess; i++)); do
+        rm -f "${local_files[$i]}" "${local_files[$i]}.sha256"
+        deleted=$((deleted + 1))
+      done
+    fi
+
+    # By age
+    local cutoff
+    cutoff="$(age_cutoff "$RETENTION_DAYS")"
+    if [ -n "$cutoff" ]; then
+      for f in "${local_files[@]}"; do
+        [ -f "$f" ] || continue  # may have been deleted by count above
+        local ts; ts="$(archive_ts "$f")"
+        [ -n "$ts" ] || continue
+        if [ "$ts" -lt "$cutoff" ]; then
+          info "Removing old local: $(basename "$f")"
+          rm -f "$f" "$f.sha256"
+          deleted=$((deleted + 1))
+        fi
+      done
+    fi
   fi
 
-  # Remote cleanup if cloud is configured
+  # --- Remote cleanup ---
   if [ "$CLOUD_READY" = "true" ]; then
     local tmp="$TMP_DIR/listing-$$.txt"
     s3 ls "s3://$BUCKET/$PREFIX" --recursive > "$tmp"
@@ -244,39 +279,31 @@ cmd_cleanup() {
     rm -f "$tmp"
 
     local total=${#keys[@]}
+
+    # By count
     if [ "$total" -gt "$RETENTION_COUNT" ]; then
       local excess=$((total - RETENTION_COUNT))
       info "Pruning $excess remote archive(s) (keep $RETENTION_COUNT)"
       for ((i=0; i<excess; i++)); do
         s3 rm "s3://$BUCKET/${keys[$i]}"
         s3 rm "s3://$BUCKET/${keys[$i]}.sha256" 2>/dev/null || true
-        ((deleted++))
+        deleted=$((deleted + 1))
       done
     fi
 
     # By age
-    if [ "$RETENTION_DAYS" -gt 0 ] && has date; then
-      local cutoff
-      if date -d "now" >/dev/null 2>&1; then
-        cutoff="$(date -d "$RETENTION_DAYS days ago" +%Y%m%d%H%M%S)"
-      elif date -v-1d >/dev/null 2>&1; then
-        cutoff="$(date -v-${RETENTION_DAYS}d +%Y%m%d%H%M%S)"
-      else
-        warn "Can't compute date cutoff; skipping age cleanup"; cutoff=""
-      fi
-
-      if [ -n "$cutoff" ]; then
-        for key in "${keys[@]}"; do
-          local ts
-          ts="$(basename "$key" | sed -n 's/.*_\([0-9]\{8\}_[0-9]\{6\}\)_.*/\1/p' | tr -d _)"
-          [ -n "$ts" ] || continue
-          if [ "$ts" -lt "$cutoff" ]; then
-            s3 rm "s3://$BUCKET/$key"
-            s3 rm "s3://$BUCKET/$key.sha256" 2>/dev/null || true
-            ((deleted++))
-          fi
-        done
-      fi
+    local cutoff
+    cutoff="$(age_cutoff "$RETENTION_DAYS")"
+    if [ -n "$cutoff" ]; then
+      for key in "${keys[@]}"; do
+        local ts; ts="$(archive_ts "$key")"
+        [ -n "$ts" ] || continue
+        if [ "$ts" -lt "$cutoff" ]; then
+          s3 rm "s3://$BUCKET/$key"
+          s3 rm "s3://$BUCKET/$key.sha256" 2>/dev/null || true
+          deleted=$((deleted + 1))
+        fi
+      done
     fi
   fi
 
