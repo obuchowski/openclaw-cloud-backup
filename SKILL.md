@@ -8,9 +8,9 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 ## What this does
 
-Backs up the OpenClaw state directory (`$OPENCLAW_STATE_DIR`, default `~/.openclaw`). That's it. Don't ask the user *what* to back up — it's always the OpenClaw state.
+Backs up the OpenClaw state. That's it. Don't ask the user *what* to back up.
 
-- **Local archive** is always created at `<state-dir>/backups/` (this folder is excluded from archives)
+- **Local archive** is always created (path shown in script output)
 - **Cloud upload** happens automatically if configured (bucket + credentials exist)
 - **Default mode is `full`** — just run it. Only use `skills` or `settings` mode if the user specifically asks.
 
