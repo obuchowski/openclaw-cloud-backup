@@ -1,6 +1,6 @@
 ---
 name: cloud-backup
-description: Back up and restore OpenClaw configuration to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use for local backups, cloud upload, restore, and retention cleanup.
+description: Back up and restore OpenClaw locally and at S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces)
 metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","aws"],"env":["AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY"]}}}
 ---
 
