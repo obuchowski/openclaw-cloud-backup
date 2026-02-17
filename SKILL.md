@@ -6,11 +6,13 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 # OpenClaw Cloud Backup
 
-## What this does
+Backs up OpenClaw state to a local archive and uploads it to cloud storage.
 
-Backs up OpenClaw state to a local archive and uploads it to cloud storage. Don't ask the user *what* to back up — just run it.
+**Do not ask** what to back up, where to store it, or anything about destinations. Just follow the steps below.
 
-## How to run a backup
+## Backup procedure (follow every step)
+
+### Step 1: Run the backup
 
 ```bash
 bash "{baseDir}/scripts/cloud-backup.sh" backup full
@@ -18,30 +20,34 @@ bash "{baseDir}/scripts/cloud-backup.sh" backup full
 
 Default mode is `full`. Only use `skills` or `settings` if the user specifically asks.
 
-**Do not ask** where to store it, what to back up, or anything about destinations. Just run the command.
+### Step 2: Check script output for warnings
 
-### After backup completes
+Look at the script output. If it contains `WARN: Cloud storage is not configured`, go to **Step 3**. Otherwise go to **Step 4**.
 
-Report the output from the script. Then:
+### Step 3: Cloud not configured — ask user to set it up
 
-- **Cloud configured** → backup is local + uploaded. Done.
-- **Cloud NOT configured** → backup is local only. Prompt the user: "Backup saved locally. Want to set up cloud storage so backups are also uploaded offsite? I support AWS S3, Cloudflare R2, Backblaze B2, MinIO, and DigitalOcean Spaces."
-- **Cloud configured but upload failed** → report the error and the local backup path.
+Tell the user the backup was saved locally, then ask:
 
-## Cloud setup
+> "Cloud storage isn't configured yet — backups are local only. Want to set up cloud upload? I support AWS S3, Cloudflare R2, Backblaze B2, MinIO, and DigitalOcean Spaces."
 
-When the user agrees to set up cloud (either from the prompt above or explicitly):
+- If user says yes → go to **Cloud setup** section below, then re-run the backup.
+- If user says no / local-only → set `config.upload=false` via `gateway config.patch`. Done.
 
-1. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or other.
-2. **Read the matching provider guide** from `references/providers/` for endpoint, region, and credential details.
-3. **Collect and write config** via `gateway config.patch` — bucket, credentials, endpoint (if non-AWS).
-4. **Run `status`** to verify, then re-run backup.
+**Do not skip this step.** The skill is called cloud-backup — always offer cloud setup when it's missing.
 
-If the user explicitly says they only want local backups, set `config.upload=false`.
+### Step 4: Report result and offer scheduling
 
-## After first successful cloud backup
+Report the backup paths from the script output to the user. Then check if a cron job already exists for cloud-backup:
 
-Offer to schedule daily backups if no cron job exists for this skill:
+```
+Use the cron tool: action=list
+```
+
+If no cron job mentions `cloud-backup`, offer to create one:
+
+> "Want me to schedule daily backups automatically (e.g. 2 AM)?"
+
+If user agrees, create the cron job:
 
 ```json
 {
@@ -50,6 +56,19 @@ Offer to schedule daily backups if no cron job exists for this skill:
   "sessionTarget": "isolated"
 }
 ```
+
+**Do not skip the scheduling offer on first backup.**
+
+---
+
+## Cloud setup
+
+When the user agrees to configure cloud storage:
+
+1. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or other.
+2. **Read the matching provider guide** from `references/providers/` — it has exact config keys, endpoint format, and credential steps.
+3. **Collect and write config** via `gateway config.patch` — bucket, credentials, endpoint (if non-AWS).
+4. **Run `status`** to verify connectivity, then re-run backup.
 
 ## Commands
 
