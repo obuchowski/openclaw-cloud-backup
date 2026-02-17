@@ -146,6 +146,11 @@ cmd_backup() {
   case "$mode" in full|workspace|skills|settings) ;; *) die "mode: full, workspace, skills, settings" ;; esac
   need tar; [ -d "$SOURCE" ] || die "source missing: $SOURCE"
 
+  if [ "$ENCRYPT" != "true" ]; then
+    warn "Encryption is disabled — backup archive will be stored in plaintext."
+    warn "To enable encryption: set config.encrypt=true and env.GPG_PASSPHRASE."
+  fi
+
   # Prevent concurrent runs
   LOCKDIR="$BACKUPS/.lock"
   mkdir "$LOCKDIR" 2>/dev/null || die "backup already running (lock: $LOCKDIR)"
@@ -332,6 +337,10 @@ Backups: $BACKUPS
 
 Settings: upload=$UPLOAD  encrypt=$ENCRYPT  keep=$KEEP  days=$DAYS  local-cap=$MAX_LOCAL
 EOF
+
+  if [ "$ENCRYPT" != "true" ]; then
+    warn "Encryption is disabled — backups are plaintext until config.encrypt=true."
+  fi
 
   if [ "$UPLOAD" = "true" ] || [ -n "$BUCKET" ]; then
     echo ""

@@ -20,11 +20,13 @@ bash "{baseDir}/scripts/cloud-backup.sh" backup full
 
 Default mode is `full`. Use `workspace`, `skills`, or `settings` only when the user explicitly asks for a narrower backup scope.
 
-### Step 2: Check if encryption is configured
+### Step 2: Check backup output for encryption warning
 
-Check if `config.encrypt` is `true` in the skill config. If it is, skip to **Step 3**.
+Look at the script output from Step 1. If it contains:
 
-If encryption is NOT enabled, ask the user:
+`WARN: Encryption is disabled — backup archive will be stored in plaintext.`
+
+ask the user:
 
 > "Your backups are not encrypted. Archives contain config, credentials, and API keys in cleartext. Want to set a passphrase? (AES-256, just the passphrase needed to restore — no key files.)"
 
@@ -33,6 +35,7 @@ If encryption is NOT enabled, ask the user:
   - `skills.entries.cloud-backup.env.GPG_PASSPHRASE = "<passphrase>"`
   Then re-run the backup so the archive is encrypted.
 - If user says no / skip → continue to Step 3. **Ask again next time.**
+- If the warning is not present (encryption already enabled) → continue to Step 3.
 
 **Do not skip this step.** Ask every time encryption is off. Backups contain secrets.
 
