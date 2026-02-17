@@ -55,6 +55,7 @@ Only `bucket` + credentials are required. Everything else has sensible defaults.
 - [Backblaze B2](references/providers/backblaze-b2.md)
 - [MinIO](references/providers/minio.md)
 - [DigitalOcean Spaces](references/providers/digitalocean-spaces.md)
+- [Other / Custom](references/providers/other.md)
 
 ## Prerequisites
 
@@ -75,7 +76,8 @@ Only `bucket` + credentials are required. Everything else has sensible defaults.
 │       ├── cloudflare-r2.md
 │       ├── backblaze-b2.md
 │       ├── minio.md
-│       └── digitalocean-spaces.md
+│       ├── digitalocean-spaces.md
+│       └── other.md
 └── publish-for-clawhub.sh
 ```
 

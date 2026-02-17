@@ -14,6 +14,7 @@ REQUIRED_FILES=(
   "references/providers/backblaze-b2.md"
   "references/providers/minio.md"
   "references/providers/digitalocean-spaces.md"
+  "references/providers/other.md"
 )
 
 echo "Preparing ClawHub bundle..."

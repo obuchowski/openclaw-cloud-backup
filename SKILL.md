@@ -15,7 +15,7 @@ When the user asks to set up or use cloud-backup and no `bucket` is configured y
 1. **Ask: local-only or cloud?** The script always creates local archives under `~/.openclaw/backups/`. Cloud upload is optional.
    - **Local-only**: set `config.upload=false`. No provider, credentials, or `aws` CLI needed. Skip to step 5.
    - **Cloud**: continue to step 2.
-2. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, or DigitalOcean Spaces. Don't guess — ask.
+2. **Ask which provider**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or something else. Don't guess — ask.
 3. **Read the matching provider guide** from `references/providers/` — it has the exact config keys, endpoint format, and credential steps.
 4. **Collect and write config** — bucket name, credentials, endpoint (if non-AWS). Write via `gateway config.patch`. Only set what they provided — don't write defaults.
 5. **Test**: run `status`, then `backup full`.
@@ -77,13 +77,14 @@ bash "{baseDir}/scripts/cloud-backup.sh" <command>
 
 See per-provider guides in `references/providers/`:
 
-- `references/providers/aws-s3.md`
-- `references/providers/cloudflare-r2.md`
-- `references/providers/backblaze-b2.md`
-- `references/providers/minio.md`
-- `references/providers/digitalocean-spaces.md`
+- `references/providers/aws-s3.md` — AWS S3
+- `references/providers/cloudflare-r2.md` — Cloudflare R2
+- `references/providers/backblaze-b2.md` — Backblaze B2
+- `references/providers/minio.md` — MinIO (self-hosted)
+- `references/providers/digitalocean-spaces.md` — DigitalOcean Spaces
+- `references/providers/other.md` — any other S3-compatible service
 
-When the user asks to set up cloud backup, read the relevant provider guide for endpoint, region, and credential details.
+When the user asks to set up cloud backup, read the matching provider guide. If their provider isn't listed, use `other.md` — it covers generic S3-compatible setup, endpoint discovery, and compatibility notes.
 
 ## Scheduling
 
