@@ -36,8 +36,8 @@ All settings live in `skills.entries.cloud-backup` in OpenClaw config.
 | `profile` | *(none)* | no | Named AWS CLI profile (alternative to keys) |
 | `upload` | `true` | no | Upload to cloud after local backup |
 | `encrypt` | `false` | no | GPG-encrypt archives before upload |
-| `retentionCount` | `10` | no | Keep at least N backups on cleanup |
-| `retentionDays` | `30` | no | Delete backups older than N days on cleanup |
+| `retentionCount` | `10` | no | Keep at least N backups on cleanup (cloud); local is capped at 7 |
+| `retentionDays` | `30` | no | Delete remote backups older than N days on cleanup |
 
 ### `env.*` — secrets
 
