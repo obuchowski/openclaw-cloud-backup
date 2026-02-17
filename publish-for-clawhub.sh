@@ -8,30 +8,29 @@ OUT="$REPO_ROOT/clawhub-bundle"
 REQUIRED_FILES=(
   "SKILL.md"
   "scripts/cloud-backup.sh"
-  "references/provider-setup.md"
-  "references/security-troubleshooting.md"
+  "references/security.md"
+  "references/providers/aws-s3.md"
+  "references/providers/cloudflare-r2.md"
+  "references/providers/backblaze-b2.md"
+  "references/providers/minio.md"
+  "references/providers/digitalocean-spaces.md"
 )
 
 echo "Preparing ClawHub bundle..."
 
-for relative_path in "${REQUIRED_FILES[@]}"; do
-  if [ ! -f "$REPO_ROOT/$relative_path" ]; then
-    echo "Error: required file is missing: $relative_path" >&2
-    exit 1
-  fi
+for f in "${REQUIRED_FILES[@]}"; do
+  [ -f "$REPO_ROOT/$f" ] || { echo "Error: missing $f" >&2; exit 1; }
 done
 
 rm -rf "$OUT"
-mkdir -p "$OUT/scripts" "$OUT/references"
+mkdir -p "$OUT/scripts" "$OUT/references/providers"
 
 cp "$REPO_ROOT/SKILL.md" "$OUT/"
 cp "$REPO_ROOT/scripts/cloud-backup.sh" "$OUT/scripts/"
-cp "$REPO_ROOT/references/provider-setup.md" "$OUT/references/"
-cp "$REPO_ROOT/references/security-troubleshooting.md" "$OUT/references/"
+cp "$REPO_ROOT/references/security.md" "$OUT/references/"
+cp "$REPO_ROOT/references/providers/"*.md "$OUT/references/providers/"
 
 echo "Created: $OUT"
-echo "Bundle contents:"
 ls -R "$OUT"
 echo ""
-echo "Upload this folder in ClawHub:"
-echo "  $OUT"
+echo "Upload this folder: $OUT"

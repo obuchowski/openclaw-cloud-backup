@@ -54,11 +54,12 @@ load_config() {
   RETENTION_COUNT="$(cfg config retentionCount)"; RETENTION_COUNT="${RETENTION_COUNT:-10}"
   RETENTION_DAYS="$(cfg config retentionDays)";   RETENTION_DAYS="${RETENTION_DAYS:-30}"
 
-  # Credentials: env vars override config
-  : "${AWS_ACCESS_KEY_ID:=$(cfg env AWS_ACCESS_KEY_ID)}"
-  : "${AWS_SECRET_ACCESS_KEY:=$(cfg env AWS_SECRET_ACCESS_KEY)}"
-  : "${AWS_SESSION_TOKEN:=$(cfg env AWS_SESSION_TOKEN)}"
-  : "${AWS_PROFILE:=$(cfg config awsProfile)}"
+  # Credentials: env vars override config.
+  # Config uses generic names; we export as AWS_* for the aws CLI.
+  : "${AWS_ACCESS_KEY_ID:=$(cfg env ACCESS_KEY_ID)}"
+  : "${AWS_SECRET_ACCESS_KEY:=$(cfg env SECRET_ACCESS_KEY)}"
+  : "${AWS_SESSION_TOKEN:=$(cfg env SESSION_TOKEN)}"
+  : "${AWS_PROFILE:=$(cfg config profile)}"
   : "${GPG_PASSPHRASE:=$(cfg env GPG_PASSPHRASE)}"
   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 
@@ -335,8 +336,8 @@ cmd_setup() {
   echo "Or manually:"
   echo '  openclaw config patch '\''skills.entries.cloud-backup.config.bucket="my-bucket"'\'''
   echo '  openclaw config patch '\''skills.entries.cloud-backup.config.region="us-east-1"'\'''
-  echo '  openclaw config patch '\''skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="AKIA..."'\'''
-  echo '  openclaw config patch '\''skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..."'\'''
+  echo '  openclaw config patch '\''skills.entries.cloud-backup.env.ACCESS_KEY_ID="..."'\'''
+  echo '  openclaw config patch '\''skills.entries.cloud-backup.env.SECRET_ACCESS_KEY="..."'\'''
   echo ""
   echo "Non-AWS providers also need:"
   echo '  openclaw config patch '\''skills.entries.cloud-backup.config.endpoint="https://..."'\'''

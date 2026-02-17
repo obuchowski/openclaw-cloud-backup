@@ -1,49 +1,28 @@
 # OpenClaw Cloud Backup
 
-Back up your OpenClaw configuration to local archives and any S3-compatible storage.
+Back up your OpenClaw configuration locally and to any S3-compatible storage.
 
-**Supported providers:** AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, any S3-compatible endpoint.
-
-## Installation
-
-Install as an OpenClaw skill from [ClawHub](https://clawhub.com) or copy the `clawhub-bundle/` contents to your skills directory.
-
-## Prerequisites
-
-- `bash`, `tar`, `jq`
-- `aws` CLI v1 or v2 ([install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
-- `gpg` (optional, for encryption)
+**Supported providers:** AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces — anything with an S3-compatible API.
 
 ## Quick Start
 
 ### 1. Configure
 
-Everything lives in OpenClaw config (`~/.openclaw/openclaw.json`).
+Ask your OpenClaw agent:
+> "Set up cloud-backup with Cloudflare R2, bucket `my-backups`, and these credentials..."
 
-**Ask your OpenClaw agent:**
-> "Set up cloud-backup with bucket `my-bucket`, region `us-east-1`, access key `AKIA...` and secret `...`"
-
-**Or manually:**
+Or manually:
 ```bash
-openclaw config patch 'skills.entries.cloud-backup.config.bucket="my-bucket"'
-openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
-openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="AKIA..."'
-openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..."'
-
-# Non-AWS providers — also set endpoint:
-openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="my-backups"'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'  # non-AWS only
+openclaw config patch 'skills.entries.cloud-backup.env.ACCESS_KEY_ID="..."'
+openclaw config patch 'skills.entries.cloud-backup.env.SECRET_ACCESS_KEY="..."'
 ```
 
-### 2. Verify
+### 2. Verify and backup
 
 ```bash
-bash scripts/cloud-backup.sh setup
 bash scripts/cloud-backup.sh status
-```
-
-### 3. First backup
-
-```bash
 bash scripts/cloud-backup.sh backup full
 bash scripts/cloud-backup.sh list
 ```
@@ -52,89 +31,52 @@ bash scripts/cloud-backup.sh list
 
 | Command | Description |
 |---------|-------------|
-| `setup` | Show config guide and test connection |
-| `status` | Print config and dependency status |
 | `backup [full\|skills\|settings]` | Create and upload backup |
 | `list` | List cloud backups |
 | `restore <name> [--dry-run] [--yes]` | Download and restore |
 | `cleanup` | Prune old backups |
-| `help` | Show usage |
+| `status` | Show config and deps |
+| `setup` | Setup guide + connection test |
 
 ## Configuration
 
-All settings live in `skills.entries.cloud-backup` in OpenClaw config.
+All settings in `skills.entries.cloud-backup` in OpenClaw config (`~/.openclaw/openclaw.json`).
 
-### Non-secrets (`config.*`)
+**Settings** (`config.*`): `bucket`, `region` (default: `us-east-1`), `endpoint`, `profile`, `upload` (default: `true`), `encrypt` (default: `false`), `retentionCount` (default: `10`), `retentionDays` (default: `30`).
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `bucket` | *(required)* | S3 bucket name |
-| `region` | `us-east-1` | AWS region |
-| `endpoint` | *(none)* | Custom endpoint for non-AWS providers |
-| `awsProfile` | *(none)* | Named AWS profile (alternative to keys) |
-| `upload` | `true` | Upload to cloud after backup |
-| `encrypt` | `false` | GPG encrypt archives |
-| `retentionCount` | `10` | Keep N most recent backups |
-| `retentionDays` | `30` | Delete backups older than N days |
+**Secrets** (`env.*`): `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `SESSION_TOKEN`, `GPG_PASSPHRASE`.
 
-Source directory, local backup path, and S3 prefix are derived automatically from the OpenClaw config path and hostname — no configuration needed.
+Only `bucket` + credentials are required. Everything else has sensible defaults.
 
-### Secrets (`env.*`)
+## Provider Guides
 
-| Key | Description |
-|-----|-------------|
-| `AWS_ACCESS_KEY_ID` | Access key ID |
-| `AWS_SECRET_ACCESS_KEY` | Secret access key |
-| `AWS_SESSION_TOKEN` | Optional session token |
-| `GPG_PASSPHRASE` | For client-side encryption |
+- [AWS S3](references/providers/aws-s3.md)
+- [Cloudflare R2](references/providers/cloudflare-r2.md)
+- [Backblaze B2](references/providers/backblaze-b2.md)
+- [MinIO](references/providers/minio.md)
+- [DigitalOcean Spaces](references/providers/digitalocean-spaces.md)
 
-### Config priority
+## Prerequisites
 
-1. Environment variables (CI/automation override)
-2. OpenClaw config (normal usage)
-
-## Provider Setup
-
-See `references/provider-setup.md` for provider-specific instructions.
-
-## Scheduling
-
-Use OpenClaw's native cron — ask your agent:
-
-> "Schedule daily cloud backups at 2am"
-
-> "Run weekly backup cleanup on Sundays"
-
-The agent creates isolated cron jobs that invoke the backup script automatically.
-
-## Security
-
-- Keep bucket private with least-privilege credentials
-- Secrets in OpenClaw config are protected by file permissions
-- Archive paths are validated against traversal attacks
-- Always `restore --dry-run` before extracting
-- See `references/security-troubleshooting.md` for full guidance
+- `bash`, `tar`, `jq`, `aws` CLI (v1 or v2)
+- `gpg` (optional, for encryption)
 
 ## Repository Layout
 
 ```
-├── SKILL.md                 # Skill definition (bundled)
-├── README.md                # This file (GitHub only)
+├── SKILL.md                          # Skill definition
+├── README.md
 ├── scripts/
 │   └── cloud-backup.sh
-
 ├── references/
-│   ├── provider-setup.md
-│   └── security-troubleshooting.md
-├── publish-for-clawhub.sh   # Build ClawHub bundle
-└── clawhub-bundle/          # Generated upload folder
-```
-
-## ClawHub Publishing
-
-```bash
-bash publish-for-clawhub.sh
-# Upload ./clawhub-bundle/ to ClawHub
+│   ├── security.md
+│   └── providers/
+│       ├── aws-s3.md
+│       ├── cloudflare-r2.md
+│       ├── backblaze-b2.md
+│       ├── minio.md
+│       └── digitalocean-spaces.md
+└── publish-for-clawhub.sh
 ```
 
 ## License
