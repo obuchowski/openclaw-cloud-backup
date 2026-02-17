@@ -1,6 +1,6 @@
 # Provider Setup Guide
 
-This guide explains how to obtain the required values for `example.conf`:
+This guide explains how to obtain the cloud configuration values:
 
 - `BUCKET`
 - `REGION`

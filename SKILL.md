@@ -23,6 +23,7 @@ Back up OpenClaw configuration locally, with optional sync to S3-compatible clou
 
 - `references/provider-setup.md` — endpoint, region, keys, and least-privilege setup per provider
 - `references/security-troubleshooting.md` — security guardrails and common failure fixes
+- `references/local-config.md` — optional local settings (paths, retention, behavior)
 
 ## Setup
 
@@ -60,11 +61,7 @@ openclaw config patch 'skills.entries.cloud-backup.endpoint="https://..."'
 
 ### Local settings (optional)
 
-For non-secret settings (paths, retention), copy the example config:
-
-```bash
-cp "{baseDir}/example.conf" "$HOME/.openclaw-cloud-backup.conf"
-```
+For non-secret settings (paths, retention), see `references/local-config.md` and copy the config block to `~/.openclaw-cloud-backup.conf`.
 
 ### Verify setup
 

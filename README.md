@@ -78,7 +78,7 @@ Stored at `skills.entries.cloud-backup.*`:
 
 ### Local settings (optional)
 
-Copy `example.conf` to `~/.openclaw-cloud-backup.conf` for non-secret settings:
+See `references/local-config.md` for non-secret settings. Copy the config block to `~/.openclaw-cloud-backup.conf`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -123,7 +123,7 @@ The agent creates isolated cron jobs that invoke the backup script automatically
 ```
 ├── SKILL.md                 # Skill definition (bundled)
 ├── README.md                # This file (GitHub only)
-├── example.conf             # Non-secret config template
+├── references/local-config.md    # Non-secret config template
 ├── scripts/
 │   └── openclaw-cloud-backup.sh
 ├── references/
