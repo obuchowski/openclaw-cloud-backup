@@ -120,16 +120,15 @@ cmd_backup() {
   [ "$ENCRYPT" = "true" ] && { need gpg; info "Encrypting"; payload="$(gpg_enc "$arc")"; }
   sha_make "$payload"
 
-  if [ "$UPLOAD" = "true" ]; then
-    if [ "$CLOUD" = "true" ]; then
-      info "Uploading to s3://$BUCKET/$PREFIX"
-      s3 cp "$payload" "s3://$BUCKET/$PREFIX$(basename "$payload")"
-      s3 cp "$payload.sha256" "s3://$BUCKET/$PREFIX$(basename "$payload").sha256"
-    else
-      warn "upload=true but cloud not configured — local only"
-    fi
+  if [ "$UPLOAD" = "true" ] && [ "$CLOUD" = "true" ]; then
+    info "Uploading to s3://$BUCKET/$PREFIX"
+    s3 cp "$payload" "s3://$BUCKET/$PREFIX$(basename "$payload")"
+    s3 cp "$payload.sha256" "s3://$BUCKET/$PREFIX$(basename "$payload").sha256"
+    info "Backup complete: $payload"
+    info "Uploaded to: s3://$BUCKET/$PREFIX$(basename "$payload")"
+  else
+    info "Backup complete: $payload"
   fi
-  info "Done: $payload"
 }
 
 cmd_list() {
