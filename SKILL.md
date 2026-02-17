@@ -1,6 +1,6 @@
 ---
 name: cloud-backup
-description: Back up and restore the OpenClaw state directory (~/.openclaw). Creates local archives and optionally uploads to S3-compatible cloud storage. Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
+description: Back up and restore OpenClaw state. Creates local archives and optionally uploads to S3-compatible cloud storage. Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
 metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","aws"]}}}
 ---
 
@@ -21,8 +21,7 @@ bash "{baseDir}/scripts/cloud-backup.sh" backup full
 ```
 
 After it finishes, tell the user:
-- "Backup saved to `~/.openclaw/backups/<filename>`"
-- If cloud is configured: "Also uploaded to `s3://<bucket>/<prefix>`"
+- Report the local path and cloud URL from the script output
 - If cloud is NOT configured: don't mention cloud at all
 
 **Do not ask** where to store the backup. Do not ask what to back up. Do not offer choices about destinations. Just run it.
