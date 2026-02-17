@@ -58,7 +58,7 @@ Environment:
 
 Secrets are read from (in priority order):
   1. Environment variables (AWS_ACCESS_KEY_ID, etc.)
-  2. OpenClaw config: skills.openclaw-cloud-backup.*
+  2. OpenClaw config: skills.entries.cloud-backup.*
   3. Local config file (legacy/fallback)
 
 Examples:
@@ -238,7 +238,7 @@ aws_cli() {
 require_cloud_config() {
   if [ -z "$BUCKET" ]; then
     log_error "BUCKET is not configured."
-    log_error "Set it in OpenClaw config: skills.cloud-backup.bucket"
+    log_error "Set it in OpenClaw config: skills.entries.cloud-backup.bucket"
     log_error "Or run: $SCRIPT_NAME setup"
     exit 1
   fi
@@ -802,9 +802,9 @@ cmd_setup() {
   printf "\n%sTo configure, ask your OpenClaw agent:%s\n" "$COLOR_GREEN" "$COLOR_RESET"
   printf "  \"Set up cloud-backup with bucket X and these credentials...\"\n"
   printf "\nOr manually patch config:\n"
-  printf "  openclaw config patch 'skills.cloud-backup.bucket=\"my-bucket\"'\n"
-  printf "  openclaw config patch 'skills.cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
-  printf "  openclaw config patch 'skills.cloud-backup.awsSecretAccessKey=\"...\"'\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.bucket=\"my-bucket\"'\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey=\"...\"'\n"
 
   # Check current config
   printf "\n%sCurrent configuration:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
