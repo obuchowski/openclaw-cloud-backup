@@ -1,5 +1,5 @@
 ---
-name: openclaw-cloud-backup
+name: cloud-backup
 description: Back up and restore OpenClaw configuration to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use for local backups, cloud upload, restore, and retention cleanup.
 metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq"]}}}
 ---
@@ -26,7 +26,7 @@ Back up OpenClaw configuration locally, with optional sync to S3-compatible clou
 
 ## Setup
 
-Secrets are stored in OpenClaw config at `skills.openclaw-cloud-backup.*`:
+Secrets are stored in OpenClaw config at `skills.cloud-backup.*`:
 
 ```
 bucket              - S3 bucket name (required)
@@ -49,13 +49,13 @@ The agent will run `gateway config.patch` to store credentials securely.
 
 ```bash
 # Store secrets in OpenClaw config
-openclaw config patch 'skills.openclaw-cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.openclaw-cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.openclaw-cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.openclaw-cloud-backup.awsSecretAccessKey="..."'
+openclaw config patch 'skills.cloud-backup.bucket="my-bucket"'
+openclaw config patch 'skills.cloud-backup.region="us-east-1"'
+openclaw config patch 'skills.cloud-backup.awsAccessKeyId="AKIA..."'
+openclaw config patch 'skills.cloud-backup.awsSecretAccessKey="..."'
 
 # For non-AWS providers, also set endpoint:
-openclaw config patch 'skills.openclaw-cloud-backup.endpoint="https://..."'
+openclaw config patch 'skills.cloud-backup.endpoint="https://..."'
 ```
 
 ### Local settings (optional)

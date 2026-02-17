@@ -6,7 +6,7 @@ SCRIPT_NAME="$(basename "$0")"
 CONFIG_FILE="${OPENCLAW_BACKUP_CONFIG:-$HOME/.openclaw-cloud-backup.conf}"
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 LOCK_DIR="${TMPDIR:-/tmp}/openclaw-cloud-backup.lock"
-SKILL_CONFIG_PATH="skills.openclaw-cloud-backup"
+SKILL_CONFIG_PATH="skills.cloud-backup"
 
 COLOR_RED=""
 COLOR_GREEN=""
@@ -239,7 +239,7 @@ aws_cli() {
 require_cloud_config() {
   if [ -z "$BUCKET" ]; then
     log_error "BUCKET is not configured."
-    log_error "Set it in OpenClaw config: skills.openclaw-cloud-backup.bucket"
+    log_error "Set it in OpenClaw config: skills.cloud-backup.bucket"
     log_error "Or run: $SCRIPT_NAME setup"
     exit 1
   fi
@@ -801,11 +801,11 @@ cmd_setup() {
   printf "  • gpgPassphrase   - For client-side encryption\n"
 
   printf "\n%sTo configure, ask your OpenClaw agent:%s\n" "$COLOR_GREEN" "$COLOR_RESET"
-  printf "  \"Set up openclaw-cloud-backup with bucket X and these credentials...\"\n"
+  printf "  \"Set up cloud-backup with bucket X and these credentials...\"\n"
   printf "\nOr manually patch config:\n"
-  printf "  openclaw config patch 'skills.openclaw-cloud-backup.bucket=\"my-bucket\"'\n"
-  printf "  openclaw config patch 'skills.openclaw-cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
-  printf "  openclaw config patch 'skills.openclaw-cloud-backup.awsSecretAccessKey=\"...\"'\n"
+  printf "  openclaw config patch 'skills.cloud-backup.bucket=\"my-bucket\"'\n"
+  printf "  openclaw config patch 'skills.cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
+  printf "  openclaw config patch 'skills.cloud-backup.awsSecretAccessKey=\"...\"'\n"
 
   # Check current config
   printf "\n%sCurrent configuration:%s\n" "$COLOR_BLUE" "$COLOR_RESET"

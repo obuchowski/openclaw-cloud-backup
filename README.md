@@ -21,17 +21,17 @@ Install as an OpenClaw skill from [ClawHub](https://clawhub.com) or copy the `cl
 Secrets are stored in OpenClaw config (`~/.openclaw/openclaw.json`).
 
 **Ask your OpenClaw agent:**
-> "Set up openclaw-cloud-backup with bucket `my-bucket`, region `us-east-1`, access key `AKIA...` and secret `...`"
+> "Set up cloud-backup with bucket `my-bucket`, region `us-east-1`, access key `AKIA...` and secret `...`"
 
 **Or manually:**
 ```bash
-openclaw config patch 'skills.openclaw-cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.openclaw-cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.openclaw-cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.openclaw-cloud-backup.awsSecretAccessKey="..."'
+openclaw config patch 'skills.cloud-backup.bucket="my-bucket"'
+openclaw config patch 'skills.cloud-backup.region="us-east-1"'
+openclaw config patch 'skills.cloud-backup.awsAccessKeyId="AKIA..."'
+openclaw config patch 'skills.cloud-backup.awsSecretAccessKey="..."'
 
 # For non-AWS providers:
-openclaw config patch 'skills.openclaw-cloud-backup.endpoint="https://..."'
+openclaw config patch 'skills.cloud-backup.endpoint="https://..."'
 ```
 
 ### 2. Verify setup
@@ -64,7 +64,7 @@ bash scripts/openclaw-cloud-backup.sh list
 
 ### Secrets (OpenClaw config)
 
-Stored at `skills.openclaw-cloud-backup.*`:
+Stored at `skills.cloud-backup.*`:
 
 | Key | Description |
 |-----|-------------|
