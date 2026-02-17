@@ -3,7 +3,9 @@
 # Config: skills.entries.cloud-backup.config.* / .env.* in ~/.openclaw/openclaw.json
 set -euo pipefail
 
-OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
+# State dir: respect OPENCLAW_STATE_DIR, fall back to ~/.openclaw
+OPENCLAW_STATE="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
+OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$OPENCLAW_STATE/openclaw.json}"
 MAX_LOCAL=7  # hard cap on local archives regardless of retentionCount
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
@@ -24,7 +26,7 @@ load_config() {
   BUCKET="$(cfg config bucket)"
   REGION="$(cfg config region)";             REGION="${REGION:-us-east-1}"
   ENDPOINT="$(cfg config endpoint)"
-  SOURCE="$(dirname "$OPENCLAW_CONFIG")"
+  SOURCE="$OPENCLAW_STATE"
   BACKUPS="$SOURCE/backups"
   PREFIX="openclaw-backups/$(hostname -s 2>/dev/null || hostname)/"
 
@@ -114,7 +116,7 @@ cmd_backup() {
   arc="$BACKUPS/openclaw_${mode}_${ts}_${host//[^a-zA-Z0-9._-]/_}.tar.gz"
 
   info "Creating $mode backup (${#paths[@]} items)"
-  tar -czf "$arc" -C "$SOURCE" "${paths[@]}"
+  tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}"
   payload="$arc"
 
   [ "$ENCRYPT" = "true" ] && { need gpg; info "Encrypting"; payload="$(gpg_enc "$arc")"; }
