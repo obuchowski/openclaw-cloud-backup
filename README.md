@@ -16,32 +16,32 @@ Install as an OpenClaw skill from [ClawHub](https://clawhub.com) or copy the `cl
 
 ## Quick Start
 
-### 1. Configure credentials
+### 1. Configure
 
-Secrets are stored in OpenClaw config (`~/.openclaw/openclaw.json`).
+Everything lives in OpenClaw config (`~/.openclaw/openclaw.json`).
 
 **Ask your OpenClaw agent:**
 > "Set up cloud-backup with bucket `my-bucket`, region `us-east-1`, access key `AKIA...` and secret `...`"
 
 **Or manually:**
 ```bash
-openclaw config patch 'skills.entries.cloud-backup.bucket="my-bucket"'
-openclaw config patch 'skills.entries.cloud-backup.region="us-east-1"'
-openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId="AKIA..."'
-openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey="..."'
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="my-bucket"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="AKIA..."'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..."'
 
-# For non-AWS providers:
-openclaw config patch 'skills.entries.cloud-backup.endpoint="https://..."'
+# Non-AWS providers — also set endpoint:
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'
 ```
 
-### 2. Verify setup
+### 2. Verify
 
 ```bash
 bash scripts/openclaw-cloud-backup.sh setup
 bash scripts/openclaw-cloud-backup.sh status
 ```
 
-### 3. Create first backup
+### 3. First backup
 
 ```bash
 bash scripts/openclaw-cloud-backup.sh backup full
@@ -62,39 +62,37 @@ bash scripts/openclaw-cloud-backup.sh list
 
 ## Configuration
 
-### Secrets (OpenClaw config)
+All settings live in `skills.entries.cloud-backup` in OpenClaw config.
 
-Stored at `skills.entries.cloud-backup.*`:
+### Non-secrets (`config.*`)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `bucket` | *(required)* | S3 bucket name |
+| `region` | `us-east-1` | AWS region |
+| `endpoint` | *(none)* | Custom endpoint for non-AWS providers |
+| `awsProfile` | *(none)* | Named AWS profile (alternative to keys) |
+| `sourceRoot` | `~/.openclaw` | Directory to back up |
+| `localBackupDir` | `~/openclaw-cloud-backups` | Local archive storage |
+| `prefix` | `openclaw-backups/<hostname>/` | S3 key prefix |
+| `upload` | `true` | Upload to cloud after backup |
+| `encrypt` | `false` | GPG encrypt archives |
+| `retentionCount` | `10` | Keep N most recent backups |
+| `retentionDays` | `30` | Delete backups older than N days |
+
+### Secrets (`env.*`)
 
 | Key | Description |
 |-----|-------------|
-| `bucket` | S3 bucket name (required) |
-| `region` | AWS region (default: us-east-1) |
-| `endpoint` | Custom endpoint for non-AWS providers |
-| `awsAccessKeyId` | Access key ID |
-| `awsSecretAccessKey` | Secret access key |
-| `awsProfile` | Named AWS profile (alternative to keys) |
-| `gpgPassphrase` | For client-side encryption |
-
-### Local settings (optional)
-
-See `references/local-config.md` for non-secret settings. Copy the config block to `~/.openclaw-cloud-backup.conf`:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `SOURCE_ROOT` | `~/.openclaw` | Directory to back up |
-| `LOCAL_BACKUP_DIR` | `~/openclaw-cloud-backups` | Local archive storage |
-| `PREFIX` | `openclaw-backups/<hostname>/` | S3 key prefix |
-| `UPLOAD` | `true` | Upload to cloud after backup |
-| `ENCRYPT` | `false` | GPG encrypt archives |
-| `RETENTION_COUNT` | `10` | Keep N most recent backups |
-| `RETENTION_DAYS` | `30` | Delete backups older than N days |
+| `AWS_ACCESS_KEY_ID` | Access key ID |
+| `AWS_SECRET_ACCESS_KEY` | Secret access key |
+| `AWS_SESSION_TOKEN` | Optional session token |
+| `GPG_PASSPHRASE` | For client-side encryption |
 
 ### Config priority
 
-1. Environment variables (CI/automation)
-2. OpenClaw config (recommended)
-3. Local config file (fallback)
+1. Environment variables (CI/automation override)
+2. OpenClaw config (normal usage)
 
 ## Provider Setup
 
@@ -123,7 +121,6 @@ The agent creates isolated cron jobs that invoke the backup script automatically
 ```
 ├── SKILL.md                 # Skill definition (bundled)
 ├── README.md                # This file (GitHub only)
-├── references/local-config.md    # Non-secret config template
 ├── scripts/
 │   └── openclaw-cloud-backup.sh
 ├── references/

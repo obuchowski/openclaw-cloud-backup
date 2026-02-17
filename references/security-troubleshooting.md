@@ -4,38 +4,24 @@
 
 1. Keep backup bucket private.
 2. Use least-privilege credentials for one bucket only.
-3. Protect config file:
-   ```bash
-   chmod 600 ~/.openclaw-cloud-backup.conf
-   ```
+3. OpenClaw config file permissions protect secrets — ensure `~/.openclaw/openclaw.json` is readable only by your user.
 4. Never commit credentials to git.
 5. Rotate keys if you suspect leakage.
 
 ## Credential Handling
 
 - Preferred:
-  - `AWS_PROFILE` tied to a dedicated profile
+  - `awsProfile` tied to a dedicated profile
   - or short-lived keys from your provider
 - Avoid:
   - account-wide admin keys
   - sharing backup credentials between unrelated systems
 
-If using config file keys, store them only in:
-
-- `~/.openclaw-cloud-backup.conf`
-
-and restrict that file to your user.
-
 ## Encryption
 
-Set `ENCRYPT=true` to upload encrypted archives (`.gpg`).
+Set `config.encrypt` to `true` to upload encrypted archives (`.gpg`).
 
-For automation, use one of:
-
-- `GPG_PASSPHRASE_FILE=/path/to/passphrase.txt`
-- `GPG_PASSPHRASE=...`
-
-If neither is set, gpg may prompt interactively.
+For automation, set `env.GPG_PASSPHRASE` in OpenClaw config. If not set, gpg may prompt interactively.
 
 ## Integrity Verification
 
@@ -55,13 +41,13 @@ Before restore:
    ```bash
    bash scripts/openclaw-cloud-backup.sh restore <backup-name> --dry-run
    ```
-2. Confirm target directory (`SOURCE_ROOT`) is correct.
+2. Confirm target directory (`sourceRoot`) is correct.
 3. Confirm backup date and host are expected.
 4. Take a fresh backup of current state if possible.
 
 After restore:
 
-1. Validate expected files under `SOURCE_ROOT`.
+1. Validate expected files under `sourceRoot`.
 2. Confirm sensitive files still have correct permissions.
 3. Run application smoke checks.
 
@@ -69,8 +55,7 @@ After restore:
 
 ### `Unable to locate credentials`
 
-- Set `AWS_PROFILE` or keys in config.
-- If keys are set in config, ensure they are non-empty.
+- Check `skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` are set.
 - Re-run:
   ```bash
   bash scripts/openclaw-cloud-backup.sh status
@@ -84,19 +69,19 @@ After restore:
 
 ### `Invalid endpoint` / DNS errors
 
-- Check `ENDPOINT` format.
+- Check `config.endpoint` format.
 - Remove trailing spaces.
-- For AWS S3, keep `ENDPOINT` empty.
+- For AWS S3, leave `endpoint` unset.
 
 ### Signature mismatch errors
 
 - Region mismatch is common.
-- Check `REGION` and provider docs.
+- Check `config.region` and provider docs.
 - Verify system clock is correct.
 
 ### `gpg: command not found`
 
-- Install gpg or set `ENCRYPT=false`.
+- Install gpg or set `config.encrypt` to `false`.
 
 ### Checksum verification failed
 
@@ -115,6 +100,6 @@ If credentials are compromised:
 
 1. Revoke key/token immediately in provider console.
 2. Create new scoped credentials.
-3. Update `~/.openclaw-cloud-backup.conf`.
+3. Update `skills.entries.cloud-backup.env.*` in OpenClaw config.
 4. Review recent bucket objects and delete suspicious files.
 5. Trigger a fresh backup with new credentials.

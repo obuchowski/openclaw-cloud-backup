@@ -1,19 +1,11 @@
 # Provider Setup Guide
 
-This guide explains how to obtain the cloud configuration values:
+How to obtain cloud configuration values for each supported provider.
 
-- `BUCKET`
-- `REGION`
-- `ENDPOINT` (for non-AWS providers)
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+All values go into OpenClaw config (`~/.openclaw/openclaw.json`):
 
-For all providers:
-
-1. Create a private bucket.
-2. Create credentials scoped to that bucket only.
-3. Allow minimum actions: list, read, write, delete.
-4. Put values into `~/.openclaw-cloud-backup.conf`.
+- `skills.entries.cloud-backup.config.*` — non-secrets (bucket, region, endpoint)
+- `skills.entries.cloud-backup.env.*` — secrets (access keys)
 
 ---
 
@@ -21,13 +13,13 @@ For all providers:
 
 ### 1) Create bucket
 
-- AWS Console -> S3 -> Create bucket
+- AWS Console → S3 → Create bucket
 - Keep "Block Public Access" enabled
 - Enable bucket versioning (recommended)
 
 ### 2) Create IAM user/key with least privilege
 
-- IAM -> Users -> Create user (programmatic access)
+- IAM → Users → Create user (programmatic access)
 - Attach a policy similar to:
 
 ```json
@@ -48,13 +40,14 @@ For all providers:
 }
 ```
 
-### 3) Config values
+### 3) Configure
 
-- `BUCKET="YOUR_BUCKET"`
-- `REGION="us-east-1"` (or your region)
-- `ENDPOINT=""`
-- `AWS_ACCESS_KEY_ID="<from IAM>"`
-- `AWS_SECRET_ACCESS_KEY="<from IAM>"`
+```bash
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="YOUR_BUCKET"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="<from IAM>"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<from IAM>"'
+```
 
 ---
 
@@ -62,28 +55,23 @@ For all providers:
 
 ### 1) Create bucket
 
-- Cloudflare Dashboard -> R2 -> Create bucket
+- Cloudflare Dashboard → R2 → Create bucket
 
 ### 2) Create API token
 
-- R2 -> API Tokens
+- R2 → API Tokens
 - Create token scoped to only this bucket
 - Permissions: Object Read and Object Write
 
-### 3) Collect config values
+### 3) Configure
 
-- Endpoint format: `https://<account_id>.r2.cloudflarestorage.com`
-- `BUCKET="<r2-bucket-name>"`
-- `REGION="auto"` (R2 commonly uses `auto`)
-- Access key ID / Secret access key from token creation
-
-### 4) Config values
-
-- `ENDPOINT="https://<account_id>.r2.cloudflarestorage.com"`
-- `BUCKET="<r2-bucket-name>"`
-- `REGION="auto"`
-- `AWS_ACCESS_KEY_ID="<r2_access_key_id>"`
-- `AWS_SECRET_ACCESS_KEY="<r2_secret_access_key>"`
+```bash
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="<r2-bucket-name>"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="auto"'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://<account_id>.r2.cloudflarestorage.com"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="<r2_access_key_id>"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<r2_secret_access_key>"'
+```
 
 ---
 
@@ -91,27 +79,22 @@ For all providers:
 
 ### 1) Create bucket
 
-- Backblaze Console -> B2 Cloud Storage -> Create bucket
-- Keep bucket private
+- Backblaze Console → B2 Cloud Storage → Create bucket (private)
 
 ### 2) Create application key
 
-- App Keys -> Create New Application Key
-- Restrict to the target bucket
-- Allow read/write/list/delete for objects as needed
+- App Keys → Create New Application Key
+- Restrict to target bucket; allow read/write/list/delete
 
-### 3) Collect config values
+### 3) Configure
 
-- Endpoint format: `https://s3.<region>.backblazeb2.com`
-- Region examples: `us-west-004`, `eu-central-003`
-
-### 4) Config values
-
-- `ENDPOINT="https://s3.us-west-004.backblazeb2.com"`
-- `BUCKET="<b2-bucket-name>"`
-- `REGION="us-west-004"`
-- `AWS_ACCESS_KEY_ID="<b2_key_id>"`
-- `AWS_SECRET_ACCESS_KEY="<b2_application_key>"`
+```bash
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="<b2-bucket-name>"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-west-004"'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://s3.us-west-004.backblazeb2.com"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="<b2_key_id>"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<b2_application_key>"'
+```
 
 ---
 
@@ -119,17 +102,17 @@ For all providers:
 
 ### 1) Create bucket and access key
 
-- In MinIO console:
-  - Create bucket (private)
-  - Create access key / secret key pair with required object permissions
+- In MinIO console: create bucket (private), create access key pair
 
-### 2) Config values
+### 2) Configure
 
-- `ENDPOINT="https://minio.example.com"`
-- `BUCKET="<minio-bucket>"`
-- `REGION="us-east-1"` (or your configured region)
-- `AWS_ACCESS_KEY_ID="<minio_access_key>"`
-- `AWS_SECRET_ACCESS_KEY="<minio_secret_key>"`
+```bash
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="<minio-bucket>"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://minio.example.com"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="<minio_access_key>"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<minio_secret_key>"'
+```
 
 ---
 
@@ -137,29 +120,25 @@ For all providers:
 
 ### 1) Create Space
 
-- DigitalOcean -> Spaces -> Create Space
-- Keep private for backups
+- DigitalOcean → Spaces → Create Space (private)
 
 ### 2) Create access key pair
 
-- API -> Spaces Keys -> Generate New Key
+- API → Spaces Keys → Generate New Key
 
-### 3) Config values
+### 3) Configure
 
-- Endpoint format: `https://<region>.digitaloceanspaces.com`
-- Example endpoint: `https://nyc3.digitaloceanspaces.com`
-
-- `ENDPOINT="https://nyc3.digitaloceanspaces.com"`
-- `BUCKET="<space-name>"`
-- `REGION="us-east-1"` (S3 signing region for Spaces)
-- `AWS_ACCESS_KEY_ID="<spaces_key>"`
-- `AWS_SECRET_ACCESS_KEY="<spaces_secret>"`
+```bash
+openclaw config patch 'skills.entries.cloud-backup.config.bucket="<space-name>"'
+openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://nyc3.digitaloceanspaces.com"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="<spaces_key>"'
+openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="<spaces_secret>"'
+```
 
 ---
 
-## Verify Configuration
-
-After filling config:
+## Verify
 
 ```bash
 bash scripts/openclaw-cloud-backup.sh status

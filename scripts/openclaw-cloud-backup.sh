@@ -3,10 +3,8 @@
 set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
-CONFIG_FILE="${OPENCLAW_BACKUP_CONFIG:-$HOME/.openclaw-cloud-backup.conf}"
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 LOCK_DIR="${TMPDIR:-/tmp}/openclaw-cloud-backup.lock"
-SKILL_CONFIG_PATH="skills.entries.cloud-backup"
 
 COLOR_RED=""
 COLOR_GREEN=""
@@ -53,13 +51,11 @@ Usage:
   $SCRIPT_NAME help
 
 Environment:
-  OPENCLAW_BACKUP_CONFIG  Override local config path (default: ~/.openclaw-cloud-backup.conf)
-  OPENCLAW_CONFIG         Override OpenClaw config path (default: ~/.openclaw/openclaw.json)
+  OPENCLAW_CONFIG  Override OpenClaw config path (default: ~/.openclaw/openclaw.json)
 
-Secrets are read from (in priority order):
-  1. Environment variables (AWS_ACCESS_KEY_ID, etc.)
-  2. OpenClaw config: skills.entries.cloud-backup.*
-  3. Local config file (legacy/fallback)
+All settings are read from OpenClaw config:
+  skills.entries.cloud-backup.config.*  (non-secrets)
+  skills.entries.cloud-backup.env.*     (secrets)
 
 Examples:
   $SCRIPT_NAME setup
@@ -115,11 +111,9 @@ acquire_lock() {
 }
 
 # Read a value from OpenClaw config using jq.
-# Schema-safe layout only:
-# - Non-secrets: skills.entries.cloud-backup.config.*
-# - Secrets:     skills.entries.cloud-backup.env.*
-# Returns empty string if not found or jq unavailable.
-read_openclaw_config() {
+# Non-secrets: skills.entries.cloud-backup.config.*
+# Secrets:     skills.entries.cloud-backup.env.*
+read_config() {
   local key="$1"
 
   if ! command -v jq >/dev/null 2>&1; then
@@ -132,86 +126,66 @@ read_openclaw_config() {
     return 0
   fi
 
-  case "$key" in
-    awsAccessKeyId)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_ACCESS_KEY_ID // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-    awsSecretAccessKey)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_SECRET_ACCESS_KEY // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-    awsSessionToken)
-      jq -r '.skills.entries["cloud-backup"].env.AWS_SESSION_TOKEN // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-    awsProfile)
-      jq -r '.skills.entries["cloud-backup"].config.awsProfile // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-    gpgPassphrase)
-      jq -r '.skills.entries["cloud-backup"].env.GPG_PASSPHRASE // empty' "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-    *)
-      jq -r ".skills.entries[\"cloud-backup\"].config.${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
-      ;;
-  esac
+  jq -r ".skills.entries[\"cloud-backup\"].config.${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+}
+
+read_env() {
+  local key="$1"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf ""
+    return 0
+  fi
+
+  if [ ! -f "$OPENCLAW_CONFIG" ]; then
+    printf ""
+    return 0
+  fi
+
+  jq -r ".skills.entries[\"cloud-backup\"].env.${key} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
 }
 
 load_config() {
-  # Load local config file first (lowest priority for secrets)
-  if [ -f "$CONFIG_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$CONFIG_FILE"
-  fi
-
-  # Non-secret settings (from config file, with defaults)
-  SOURCE_ROOT="${SOURCE_ROOT:-$HOME/.openclaw}"
-  LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/openclaw-cloud-backups}"
-  TMP_DIR="${TMP_DIR:-$HOME/.openclaw-cloud-backup/tmp}"
-  PREFIX="${PREFIX:-openclaw-backups/$(hostname -s 2>/dev/null || hostname)/}"
-  UPLOAD="$(normalize_bool "${UPLOAD:-true}")"
-  ENCRYPT="$(normalize_bool "${ENCRYPT:-false}")"
-  RETENTION_COUNT="$(sanitize_int_or_default "${RETENTION_COUNT:-10}" "10")"
-  RETENTION_DAYS="$(sanitize_int_or_default "${RETENTION_DAYS:-30}" "30")"
-  GPG_PASSPHRASE_FILE="${GPG_PASSPHRASE_FILE:-}"
-
-  # Secret settings: env > openclaw config > config file
-  # Bucket
-  if [ -z "${BUCKET:-}" ]; then
-    BUCKET="$(read_openclaw_config "bucket")"
-  fi
-  BUCKET="${BUCKET:-}"
-
-  # Region
-  if [ -z "${REGION:-}" ]; then
-    REGION="$(read_openclaw_config "region")"
-  fi
+  # Cloud settings from openclaw config
+  BUCKET="$(read_config "bucket")"
+  REGION="$(read_config "region")"
   REGION="${REGION:-us-east-1}"
+  ENDPOINT="$(read_config "endpoint")"
 
-  # Endpoint
-  if [ -z "${ENDPOINT:-}" ]; then
-    ENDPOINT="$(read_openclaw_config "endpoint")"
+  # Behavior settings from openclaw config (with defaults)
+  SOURCE_ROOT="$(read_config "sourceRoot")"
+  SOURCE_ROOT="${SOURCE_ROOT:-$HOME/.openclaw}"
+  LOCAL_BACKUP_DIR="$(read_config "localBackupDir")"
+  LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/openclaw-cloud-backups}"
+  TMP_DIR="$HOME/.openclaw-cloud-backup/tmp"
+  PREFIX="$(read_config "prefix")"
+  PREFIX="${PREFIX:-openclaw-backups/$(hostname -s 2>/dev/null || hostname)/}"
+  UPLOAD="$(normalize_bool "$(read_config "upload")")"
+  # Default upload to true when not set
+  if [ -z "$(read_config "upload")" ]; then
+    UPLOAD="true"
   fi
-  ENDPOINT="${ENDPOINT:-}"
+  ENCRYPT="$(normalize_bool "$(read_config "encrypt")")"
+  RETENTION_COUNT="$(sanitize_int_or_default "$(read_config "retentionCount")" "10")"
+  RETENTION_DAYS="$(sanitize_int_or_default "$(read_config "retentionDays")" "30")"
 
-  # AWS credentials: env vars take precedence, then openclaw config
+  # Secrets: env vars override openclaw config env.*
   if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
-    AWS_ACCESS_KEY_ID="$(read_openclaw_config "awsAccessKeyId")"
+    AWS_ACCESS_KEY_ID="$(read_env "AWS_ACCESS_KEY_ID")"
   fi
-
   if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-    AWS_SECRET_ACCESS_KEY="$(read_openclaw_config "awsSecretAccessKey")"
+    AWS_SECRET_ACCESS_KEY="$(read_env "AWS_SECRET_ACCESS_KEY")"
   fi
-
   if [ -z "${AWS_SESSION_TOKEN:-}" ]; then
-    AWS_SESSION_TOKEN="$(read_openclaw_config "awsSessionToken")"
+    AWS_SESSION_TOKEN="$(read_env "AWS_SESSION_TOKEN")"
   fi
-
   if [ -z "${AWS_PROFILE:-}" ]; then
-    AWS_PROFILE="$(read_openclaw_config "awsProfile")"
+    AWS_PROFILE="$(read_config "awsProfile")"
   fi
   AWS_PROFILE="${AWS_PROFILE:-}"
 
-  # GPG passphrase (for encryption)
   if [ -z "${GPG_PASSPHRASE:-}" ]; then
-    GPG_PASSPHRASE="$(read_openclaw_config "gpgPassphrase")"
+    GPG_PASSPHRASE="$(read_env "GPG_PASSPHRASE")"
   fi
   GPG_PASSPHRASE="${GPG_PASSPHRASE:-}"
 
@@ -260,7 +234,7 @@ aws_cli() {
 require_cloud_config() {
   if [ -z "$BUCKET" ]; then
     log_error "BUCKET is not configured."
-    log_error "Set it in OpenClaw config: skills.entries.cloud-backup.bucket"
+    log_error "Set it: openclaw config patch 'skills.entries.cloud-backup.config.bucket=\"my-bucket\"'"
     log_error "Or run: $SCRIPT_NAME setup"
     exit 1
   fi
@@ -322,12 +296,7 @@ encrypt_file() {
   local input_file="$1"
   local output_file="${input_file}.gpg"
 
-  if [ -n "$GPG_PASSPHRASE_FILE" ]; then
-    gpg --batch --yes --pinentry-mode loopback \
-      --passphrase-file "$GPG_PASSPHRASE_FILE" \
-      --symmetric --cipher-algo AES256 \
-      -o "$output_file" "$input_file"
-  elif [ -n "$GPG_PASSPHRASE" ]; then
+  if [ -n "$GPG_PASSPHRASE" ]; then
     gpg --batch --yes --pinentry-mode loopback \
       --passphrase "$GPG_PASSPHRASE" \
       --symmetric --cipher-algo AES256 \
@@ -343,11 +312,7 @@ decrypt_file() {
   local input_file="$1"
   local output_file="${input_file%.gpg}"
 
-  if [ -n "$GPG_PASSPHRASE_FILE" ]; then
-    gpg --batch --yes --pinentry-mode loopback \
-      --passphrase-file "$GPG_PASSPHRASE_FILE" \
-      -o "$output_file" -d "$input_file"
-  elif [ -n "$GPG_PASSPHRASE" ]; then
+  if [ -n "$GPG_PASSPHRASE" ]; then
     gpg --batch --yes --pinentry-mode loopback \
       --passphrase "$GPG_PASSPHRASE" \
       -o "$output_file" -d "$input_file"
@@ -476,7 +441,7 @@ cmd_backup() {
     upload_artifact "$payload_path"
     log_info "Upload complete"
   else
-    log_warn "UPLOAD=false, cloud upload skipped."
+    log_warn "upload=false, cloud upload skipped."
   fi
 
   log_info "Backup created: $payload_path"
@@ -585,7 +550,7 @@ cmd_cleanup() {
 
   if [ "$total" -gt "$RETENTION_COUNT" ]; then
     to_delete=$((total - RETENTION_COUNT))
-    log_info "Deleting $to_delete archive(s) by RETENTION_COUNT=$RETENTION_COUNT"
+    log_info "Deleting $to_delete archive(s) by retentionCount=$RETENTION_COUNT"
     i=0
     while [ "$i" -lt "$to_delete" ]; do
       key="${REMOTE_ARCHIVE_KEYS[$i]}"
@@ -598,9 +563,9 @@ cmd_cleanup() {
 
   if [ "$RETENTION_DAYS" -gt 0 ]; then
     if ! command -v python3 >/dev/null 2>&1; then
-      log_warn "python3 not found; skipping RETENTION_DAYS cleanup."
+      log_warn "python3 not found; skipping retentionDays cleanup."
     else
-      log_info "Applying RETENTION_DAYS=$RETENTION_DAYS"
+      log_info "Applying retentionDays=$RETENTION_DAYS"
       i="$start_index"
       while [ "$i" -lt "${#REMOTE_ARCHIVE_KEYS[@]}" ]; do
         key="${REMOTE_ARCHIVE_KEYS[$i]}"
@@ -704,25 +669,19 @@ cmd_status() {
 
   printf "%sOpenClaw Cloud Backup status%s\n\n" "$COLOR_BLUE" "$COLOR_RESET"
 
-  printf "%sConfig sources:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "%sConfig source:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
   printf "  OpenClaw config: %s\n" "$OPENCLAW_CONFIG"
   if [ -f "$OPENCLAW_CONFIG" ]; then
     printf "    (exists)\n"
   else
     printf "    (not found)\n"
   fi
-  printf "  Local config: %s\n" "$CONFIG_FILE"
-  if [ -f "$CONFIG_FILE" ]; then
-    printf "    (exists)\n"
-  else
-    printf "    (not found)\n"
-  fi
 
   printf "\n%sCloud settings:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
-  printf "  BUCKET: %s\n" "${BUCKET:-<not set>}"
-  printf "  REGION: %s\n" "$REGION"
-  printf "  ENDPOINT: %s\n" "${ENDPOINT:-<aws-default>}"
-  printf "  PREFIX: %s\n" "$PREFIX"
+  printf "  bucket: %s\n" "${BUCKET:-<not set>}"
+  printf "  region: %s\n" "$REGION"
+  printf "  endpoint: %s\n" "${ENDPOINT:-<aws-default>}"
+  printf "  prefix: %s\n" "$PREFIX"
 
   printf "\n%sCredentials:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
   if [ -n "${AWS_PROFILE:-}" ]; then
@@ -735,13 +694,13 @@ cmd_status() {
     printf "  No credentials configured\n"
   fi
 
-  printf "\n%sLocal settings:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
-  printf "  SOURCE_ROOT: %s\n" "$SOURCE_ROOT"
-  printf "  LOCAL_BACKUP_DIR: %s\n" "$LOCAL_BACKUP_DIR"
-  printf "  UPLOAD: %s\n" "$UPLOAD"
-  printf "  ENCRYPT: %s\n" "$ENCRYPT"
-  printf "  RETENTION_COUNT: %s\n" "$RETENTION_COUNT"
-  printf "  RETENTION_DAYS: %s\n" "$RETENTION_DAYS"
+  printf "\n%sBehavior:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "  sourceRoot: %s\n" "$SOURCE_ROOT"
+  printf "  localBackupDir: %s\n" "$LOCAL_BACKUP_DIR"
+  printf "  upload: %s\n" "$UPLOAD"
+  printf "  encrypt: %s\n" "$ENCRYPT"
+  printf "  retentionCount: %s\n" "$RETENTION_COUNT"
+  printf "  retentionDays: %s\n" "$RETENTION_DAYS"
 
   printf "\n%sDependencies:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
   for bin_name in bash tar jq; do
@@ -753,12 +712,11 @@ cmd_status() {
     fi
   done
 
-  # aws is optional for local-only backups
   if command -v aws >/dev/null 2>&1; then
     printf "  %-8s: found\n" "aws"
   else
     if [ "$UPLOAD" = "true" ]; then
-      printf "  %-8s: missing (required for UPLOAD=true)\n" "aws"
+      printf "  %-8s: missing (required for upload=true)\n" "aws"
       missing=1
     else
       printf "  %-8s: not found (optional, needed for cloud sync)\n" "aws"
@@ -767,15 +725,15 @@ cmd_status() {
 
   if [ "$ENCRYPT" = "true" ]; then
     if command -v gpg >/dev/null 2>&1; then
-      printf "  %-8s: found (required by ENCRYPT=true)\n" "gpg"
+      printf "  %-8s: found (required by encrypt=true)\n" "gpg"
     else
-      printf "  %-8s: missing (required by ENCRYPT=true)\n" "gpg"
+      printf "  %-8s: missing (required by encrypt=true)\n" "gpg"
       missing=1
     fi
   fi
 
   if ! command -v jq >/dev/null 2>&1; then
-    printf "\n%s[WARN]%s jq not found. Cannot read secrets from OpenClaw config.\n" "$COLOR_YELLOW" "$COLOR_RESET"
+    printf "\n%s[WARN]%s jq not found. Cannot read from OpenClaw config.\n" "$COLOR_YELLOW" "$COLOR_RESET"
     printf "       Install jq or use environment variables for credentials.\n"
   fi
 
@@ -785,18 +743,16 @@ cmd_status() {
 
   if [ "$UPLOAD" = "true" ]; then
     if [ -z "$BUCKET" ]; then
-      printf "\n%s[WARN]%s BUCKET not configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+      printf "\n%s[WARN]%s bucket not configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
     elif [ "$creds_source" = "none" ]; then
       printf "\n%s[WARN]%s No credentials configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
     fi
   else
-    printf "\n%s[INFO]%s UPLOAD=false. Local backups only (no cloud sync).\n" "$COLOR_BLUE" "$COLOR_RESET"
+    printf "\n%s[INFO]%s upload=false. Local backups only (no cloud sync).\n" "$COLOR_BLUE" "$COLOR_RESET"
   fi
 }
 
 cmd_setup() {
-  local test_result
-
   printf "%sOpenClaw Cloud Backup Setup%s\n\n" "$COLOR_BLUE" "$COLOR_RESET"
 
   if ! command -v jq >/dev/null 2>&1; then
@@ -807,26 +763,34 @@ cmd_setup() {
     exit 1
   fi
 
-  printf "This skill stores secrets in OpenClaw config:\n"
-  printf "  %s\n" "$OPENCLAW_CONFIG"
-  printf "  Path: %s.*\n\n" "$SKILL_CONFIG_PATH"
+  printf "All settings live in OpenClaw config:\n"
+  printf "  %s\n\n" "$OPENCLAW_CONFIG"
 
-  printf "Required settings:\n"
-  printf "  • bucket          - S3 bucket name\n"
-  printf "  • region          - AWS region (default: us-east-1)\n"
-  printf "  • awsAccessKeyId  - Access key ID\n"
-  printf "  • awsSecretAccessKey - Secret access key\n"
-  printf "\nOptional settings:\n"
-  printf "  • endpoint        - Custom endpoint for non-AWS providers\n"
-  printf "  • awsProfile      - Use named AWS profile instead of keys\n"
-  printf "  • gpgPassphrase   - For client-side encryption\n"
+  printf "Non-secrets (skills.entries.cloud-backup.config.*):\n"
+  printf "  • bucket           - S3 bucket name (required)\n"
+  printf "  • region           - AWS region (default: us-east-1)\n"
+  printf "  • endpoint         - Custom endpoint for non-AWS providers\n"
+  printf "  • awsProfile       - Named AWS profile (alternative to keys)\n"
+  printf "  • sourceRoot       - Directory to back up (default: ~/.openclaw)\n"
+  printf "  • localBackupDir   - Local archive dir (default: ~/openclaw-cloud-backups)\n"
+  printf "  • prefix           - S3 key prefix (default: openclaw-backups/<hostname>/)\n"
+  printf "  • upload           - Upload to cloud (default: true)\n"
+  printf "  • encrypt          - GPG encrypt (default: false)\n"
+  printf "  • retentionCount   - Keep N backups (default: 10)\n"
+  printf "  • retentionDays    - Delete after N days (default: 30)\n"
+
+  printf "\nSecrets (skills.entries.cloud-backup.env.*):\n"
+  printf "  • AWS_ACCESS_KEY_ID\n"
+  printf "  • AWS_SECRET_ACCESS_KEY\n"
+  printf "  • AWS_SESSION_TOKEN  (optional)\n"
+  printf "  • GPG_PASSPHRASE     (optional)\n"
 
   printf "\n%sTo configure, ask your OpenClaw agent:%s\n" "$COLOR_GREEN" "$COLOR_RESET"
   printf "  \"Set up cloud-backup with bucket X and these credentials...\"\n"
-  printf "\nOr manually patch config:\n"
-  printf "  openclaw config patch 'skills.entries.cloud-backup.bucket=\"my-bucket\"'\n"
-  printf "  openclaw config patch 'skills.entries.cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
-  printf "  openclaw config patch 'skills.entries.cloud-backup.awsSecretAccessKey=\"...\"'\n"
+  printf "\nOr manually:\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.config.bucket=\"my-bucket\"'\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID=\"AKIA...\"'\n"
+  printf "  openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY=\"...\"'\n"
 
   # Check current config
   printf "\n%sCurrent configuration:%s\n" "$COLOR_BLUE" "$COLOR_RESET"

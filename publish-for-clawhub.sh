@@ -10,7 +10,6 @@ REQUIRED_FILES=(
   "scripts/openclaw-cloud-backup.sh"
   "references/provider-setup.md"
   "references/security-troubleshooting.md"
-  "references/local-config.md"
 )
 
 echo "Preparing ClawHub bundle..."
@@ -29,7 +28,6 @@ cp "$REPO_ROOT/SKILL.md" "$OUT/"
 cp "$REPO_ROOT/scripts/openclaw-cloud-backup.sh" "$OUT/scripts/"
 cp "$REPO_ROOT/references/provider-setup.md" "$OUT/references/"
 cp "$REPO_ROOT/references/security-troubleshooting.md" "$OUT/references/"
-cp "$REPO_ROOT/references/local-config.md" "$OUT/references/"
 
 echo "Created: $OUT"
 echo "Bundle contents:"

@@ -23,32 +23,38 @@ Back up OpenClaw configuration locally, with optional sync to S3-compatible clou
 
 - `references/provider-setup.md` — endpoint, region, keys, and least-privilege setup per provider
 - `references/security-troubleshooting.md` — security guardrails and common failure fixes
-- `references/local-config.md` — optional local settings (paths, retention, behavior)
 
 ## Setup
 
-Secrets/config are stored in OpenClaw config.
+All configuration lives in OpenClaw config (`~/.openclaw/openclaw.json`):
 
-**Recommended (schema-safe) layout:**
 - Non-secrets under `skills.entries.cloud-backup.config.*`
 - Secrets under `skills.entries.cloud-backup.env.*`
 
-Supported keys:
+### Config keys
 
-```
-config.bucket              - S3 bucket name (required)
-config.region              - AWS region (default: us-east-1)
-config.endpoint            - Custom endpoint for non-AWS providers
-config.awsProfile          - Named AWS profile (alternative to keys)
+| Key | Location | Default | Description |
+|-----|----------|---------|-------------|
+| `bucket` | `config` | *(required)* | S3 bucket name |
+| `region` | `config` | `us-east-1` | AWS region |
+| `endpoint` | `config` | *(none)* | Custom endpoint for non-AWS providers |
+| `awsProfile` | `config` | *(none)* | Named AWS profile (alternative to keys) |
+| `sourceRoot` | `config` | `~/.openclaw` | Directory to back up |
+| `localBackupDir` | `config` | `~/openclaw-cloud-backups` | Where local archives are stored |
+| `prefix` | `config` | `openclaw-backups/<hostname>/` | S3 key prefix (allows multi-device buckets) |
+| `upload` | `config` | `true` | Upload to cloud after local backup |
+| `encrypt` | `config` | `false` | Encrypt archives with GPG |
+| `retentionCount` | `config` | `10` | Keep at least N backups |
+| `retentionDays` | `config` | `30` | Delete backups older than N days |
 
-env.AWS_ACCESS_KEY_ID      - Access key ID
-env.AWS_SECRET_ACCESS_KEY  - Secret access key
-env.AWS_SESSION_TOKEN      - Optional session token
-env.GPG_PASSPHRASE         - For client-side encryption (optional)
-```
+### Env keys (secrets)
 
-(Legacy config layout removed — use `skills.entries.cloud-backup.config.*` + `skills.entries.cloud-backup.env.*`.)
-
+| Key | Location | Description |
+|-----|----------|-------------|
+| `AWS_ACCESS_KEY_ID` | `env` | Access key ID |
+| `AWS_SECRET_ACCESS_KEY` | `env` | Secret access key |
+| `AWS_SESSION_TOKEN` | `env` | Optional session token |
+| `GPG_PASSPHRASE` | `env` | For client-side encryption |
 
 ### Agent-assisted setup (recommended)
 
@@ -60,19 +66,21 @@ The agent will run `gateway config.patch` to store credentials securely.
 ### Manual setup
 
 ```bash
-# Store settings in OpenClaw config (schema-safe)
+# Cloud settings
 openclaw config patch 'skills.entries.cloud-backup.config.bucket="my-bucket"'
 openclaw config patch 'skills.entries.cloud-backup.config.region="us-east-1"'
+
+# Secrets
 openclaw config patch 'skills.entries.cloud-backup.env.AWS_ACCESS_KEY_ID="AKIA..."'
 openclaw config patch 'skills.entries.cloud-backup.env.AWS_SECRET_ACCESS_KEY="..."'
 
-# For non-AWS providers, also set endpoint:
+# Non-AWS providers — also set endpoint:
 openclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://..."'
+
+# Optional behavior overrides:
+openclaw config patch 'skills.entries.cloud-backup.config.upload=false'
+openclaw config patch 'skills.entries.cloud-backup.config.retentionCount=20'
 ```
-
-### Local settings (optional)
-
-For non-secret settings (paths, retention), see `references/local-config.md` and copy the config block to `~/.openclaw-cloud-backup.conf`.
 
 ### Verify setup
 
@@ -131,15 +139,7 @@ The agent will create cron jobs that run the backup script. Example job configur
 }
 ```
 
-For local-only backups, set `UPLOAD=false` in the message or config.
-
-## Config Priority
-
-Settings are loaded in this order (first wins):
-
-1. **Environment variables** — for CI/automation
-2. **OpenClaw config** — `skills.entries.cloud-backup.*` (recommended)
-3. **Local config file** — `~/.openclaw-cloud-backup.conf` (legacy/fallback)
+For local-only backups, set `config.upload` to `false`.
 
 ## Security
 
