@@ -18,7 +18,7 @@ Backs up OpenClaw state to a local archive and uploads it to cloud storage.
 bash "{baseDir}/scripts/cloud-backup.sh" backup full
 ```
 
-Default mode is `full`. Only use `skills` or `settings` if the user specifically asks.
+Default mode is `full`. Use `workspace`, `skills`, or `settings` only when the user explicitly asks for a narrower backup scope.
 
 ### Step 2: Check if encryption is configured
 

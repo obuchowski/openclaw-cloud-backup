@@ -103,6 +103,10 @@ tar_safe() {
   [ -z "$bad" ] || { echo "$bad" >&2; die "unsafe paths in archive"; }
 }
 
+tar_supports_ignore_failed_read() {
+  tar --help 2>/dev/null | grep -q -- '--ignore-failed-read'
+}
+
 safe_rm() {
   local p
   for p in "$@"; do
@@ -145,6 +149,7 @@ cmd_backup() {
   # Prevent concurrent runs
   LOCKDIR="$BACKUPS/.lock"
   mkdir "$LOCKDIR" 2>/dev/null || die "backup already running (lock: $LOCKDIR)"
+  # Controlled lifecycle: this skill owns .backup-manifest.json for each run.
   trap 'rmdir "$LOCKDIR" 2>/dev/null || true; rm -f "$SOURCE/.backup-manifest.json"' EXIT
 
   local ts host arc payload
@@ -162,7 +167,12 @@ cmd_backup() {
     local -a ex=()
     for x in "${SNAPSHOT_DENY[@]}"; do ex+=(--exclude="$x"); done
     info "Creating $mode snapshot"
-    tar -czf "$arc" -C "$SOURCE" --ignore-failed-read "${ex[@]}" .
+    if tar_supports_ignore_failed_read; then
+      tar -czf "$arc" -C "$SOURCE" --ignore-failed-read "${ex[@]}" .
+    else
+      warn "tar lacks --ignore-failed-read; proceeding without it"
+      tar -czf "$arc" -C "$SOURCE" "${ex[@]}" .
+    fi
   else
     # Allowlist: specific files/dirs only (workspace, skills, settings)
     local -a cands paths=()

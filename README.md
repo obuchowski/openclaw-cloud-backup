@@ -31,7 +31,7 @@ bash scripts/cloud-backup.sh list
 
 | Command | Description |
 |---------|-------------|
-| `backup [full\|skills\|settings]` | Create and upload backup |
+| `backup [full\|workspace\|skills\|settings]` | Create and upload backup |
 | `list` | List local backups and remote backups (when cloud is configured) |
 | `restore <name> [--dry-run] [--yes]` | Download and restore |
 | `cleanup` | Prune old backups (local: newest logical backup sets, capped at 7; cloud: count + age) |
@@ -49,6 +49,9 @@ All settings in `skills.entries.cloud-backup` in OpenClaw config (`~/.openclaw/o
 Only `bucket` + credentials are required. Everything else has sensible defaults.
 
 Notes:
+- `full` snapshots the entire OpenClaw state directory, excluding the built-in denylist (`backups`, cache/log/temp-like paths).
+- `workspace` is the curated allowlist mode (the previous default behavior).
+- `skills` and `settings` are targeted backups for narrower use cases.
 - `encrypt=true` keeps only encrypted local archives (`.tar.gz.gpg`). Plaintext `.tar.gz` files are removed after encryption.
 - `retentionCount` applies to logical backup sets (not individual files). Local retention is still capped by `MAX_LOCAL=7`.
 - Restore checksum verification applies to both local and cloud archives.
