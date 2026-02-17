@@ -7,7 +7,6 @@ OUT="$REPO_ROOT/clawhub-bundle"
 
 REQUIRED_FILES=(
   "SKILL.md"
-  "README.md"
   "example.conf"
   "scripts/openclaw-cloud-backup.sh"
   "references/provider-setup.md"
@@ -27,7 +26,6 @@ rm -rf "$OUT"
 mkdir -p "$OUT/scripts" "$OUT/references"
 
 cp "$REPO_ROOT/SKILL.md" "$OUT/"
-cp "$REPO_ROOT/README.md" "$OUT/"
 cp "$REPO_ROOT/example.conf" "$OUT/"
 cp "$REPO_ROOT/scripts/openclaw-cloud-backup.sh" "$OUT/scripts/"
 cp "$REPO_ROOT/references/provider-setup.md" "$OUT/references/"

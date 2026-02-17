@@ -4,7 +4,9 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
 CONFIG_FILE="${OPENCLAW_BACKUP_CONFIG:-$HOME/.openclaw-cloud-backup.conf}"
+OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
 LOCK_DIR="${TMPDIR:-/tmp}/openclaw-cloud-backup.lock"
+SKILL_CONFIG_PATH="skills.openclaw-cloud-backup"
 
 COLOR_RED=""
 COLOR_GREEN=""
@@ -47,12 +49,20 @@ Usage:
   $SCRIPT_NAME restore <backup-name> [--dry-run] [--yes]
   $SCRIPT_NAME cleanup
   $SCRIPT_NAME status
+  $SCRIPT_NAME setup
   $SCRIPT_NAME help
 
 Environment:
-  OPENCLAW_BACKUP_CONFIG  Override config path (default: ~/.openclaw-cloud-backup.conf)
+  OPENCLAW_BACKUP_CONFIG  Override local config path (default: ~/.openclaw-cloud-backup.conf)
+  OPENCLAW_CONFIG         Override OpenClaw config path (default: ~/.openclaw/openclaw.json)
+
+Secrets are read from (in priority order):
+  1. Environment variables (AWS_ACCESS_KEY_ID, etc.)
+  2. OpenClaw config: skills.openclaw-cloud-backup.*
+  3. Local config file (legacy/fallback)
 
 Examples:
+  $SCRIPT_NAME setup
   $SCRIPT_NAME backup full
   $SCRIPT_NAME list
   $SCRIPT_NAME restore openclaw_full_20260217_030001_host.tar.gz --dry-run
@@ -104,29 +114,87 @@ acquire_lock() {
   trap release_lock EXIT INT TERM
 }
 
+# Read a value from OpenClaw config using jq
+# Returns empty string if not found or jq unavailable
+read_openclaw_config() {
+  local key="$1"
+  local full_path=".${SKILL_CONFIG_PATH}.${key}"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf ""
+    return 0
+  fi
+
+  if [ ! -f "$OPENCLAW_CONFIG" ]; then
+    printf ""
+    return 0
+  fi
+
+  jq -r "${full_path} // empty" "$OPENCLAW_CONFIG" 2>/dev/null || printf ""
+}
+
 load_config() {
+  # Load local config file first (lowest priority for secrets)
   if [ -f "$CONFIG_FILE" ]; then
     # shellcheck disable=SC1090
     . "$CONFIG_FILE"
-  else
-    log_warn "Config file not found at $CONFIG_FILE. Using defaults where possible."
   fi
 
+  # Non-secret settings (from config file, with defaults)
   SOURCE_ROOT="${SOURCE_ROOT:-$HOME/.openclaw}"
   LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/openclaw-cloud-backups}"
   TMP_DIR="${TMP_DIR:-$HOME/.openclaw-cloud-backup/tmp}"
-  REGION="${REGION:-us-east-1}"
-  ENDPOINT="${ENDPOINT:-}"
-  BUCKET="${BUCKET:-}"
   PREFIX="${PREFIX:-openclaw-backups/$(hostname -s 2>/dev/null || hostname)/}"
-  AWS_PROFILE="${AWS_PROFILE:-}"
   UPLOAD="$(normalize_bool "${UPLOAD:-true}")"
   ENCRYPT="$(normalize_bool "${ENCRYPT:-false}")"
   RETENTION_COUNT="$(sanitize_int_or_default "${RETENTION_COUNT:-10}" "10")"
   RETENTION_DAYS="$(sanitize_int_or_default "${RETENTION_DAYS:-30}" "30")"
-  GPG_PASSPHRASE="${GPG_PASSPHRASE:-}"
   GPG_PASSPHRASE_FILE="${GPG_PASSPHRASE_FILE:-}"
 
+  # Secret settings: env > openclaw config > config file
+  # Bucket
+  if [ -z "${BUCKET:-}" ]; then
+    BUCKET="$(read_openclaw_config "bucket")"
+  fi
+  BUCKET="${BUCKET:-}"
+
+  # Region
+  if [ -z "${REGION:-}" ]; then
+    REGION="$(read_openclaw_config "region")"
+  fi
+  REGION="${REGION:-us-east-1}"
+
+  # Endpoint
+  if [ -z "${ENDPOINT:-}" ]; then
+    ENDPOINT="$(read_openclaw_config "endpoint")"
+  fi
+  ENDPOINT="${ENDPOINT:-}"
+
+  # AWS credentials: env vars take precedence, then openclaw config
+  if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+    AWS_ACCESS_KEY_ID="$(read_openclaw_config "awsAccessKeyId")"
+  fi
+
+  if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    AWS_SECRET_ACCESS_KEY="$(read_openclaw_config "awsSecretAccessKey")"
+  fi
+
+  if [ -z "${AWS_SESSION_TOKEN:-}" ]; then
+    AWS_SESSION_TOKEN="$(read_openclaw_config "awsSessionToken")"
+  fi
+
+  if [ -z "${AWS_PROFILE:-}" ]; then
+    AWS_PROFILE="$(read_openclaw_config "awsProfile")"
+  fi
+  AWS_PROFILE="${AWS_PROFILE:-}"
+
+  # GPG passphrase (for encryption)
+  if [ -z "${GPG_PASSPHRASE:-}" ]; then
+    GPG_PASSPHRASE="$(read_openclaw_config "gpgPassphrase")"
+  fi
+  GPG_PASSPHRASE="${GPG_PASSPHRASE:-}"
+
+  # Normalize prefix
   PREFIX="${PREFIX#/}"
   if [ -n "$PREFIX" ]; then
     case "$PREFIX" in
@@ -170,7 +238,9 @@ aws_cli() {
 
 require_cloud_config() {
   if [ -z "$BUCKET" ]; then
-    log_error "BUCKET is empty. Set BUCKET in $CONFIG_FILE."
+    log_error "BUCKET is not configured."
+    log_error "Set it in OpenClaw config: skills.openclaw-cloud-backup.bucket"
+    log_error "Or run: $SCRIPT_NAME setup"
     exit 1
   fi
 }
@@ -210,6 +280,19 @@ checksum_verify() {
     (cd "$file_dir" && shasum -a 256 -c "${file_name}.sha256" >/dev/null)
   else
     log_error "Need sha256sum or shasum for checksum verification."
+    exit 1
+  fi
+}
+
+validate_tar_paths() {
+  local archive="$1"
+  local bad_entries
+
+  bad_entries="$(tar -tzf "$archive" 2>/dev/null | grep -E '^/|/\.\.(/|$)|^\.\.(\/|$)' || true)"
+
+  if [ -n "$bad_entries" ]; then
+    log_error "Archive contains unsafe paths (absolute or path traversal):"
+    printf "%s\n" "$bad_entries" >&2
     exit 1
   fi
 }
@@ -563,6 +646,9 @@ cmd_restore() {
       ;;
   esac
 
+  log_info "Validating archive paths"
+  validate_tar_paths "$local_extract_source"
+
   if [ "$dry_run" = "true" ]; then
     log_info "Dry-run mode: listing archive contents"
     tar -tzf "$local_extract_source"
@@ -587,47 +673,160 @@ cmd_restore() {
   fi
 
   mkdir -p "$SOURCE_ROOT"
-  tar -xzf "$local_extract_source" -C "$SOURCE_ROOT"
+  tar -xzf "$local_extract_source" -C "$SOURCE_ROOT" --no-same-owner --no-same-permissions
   log_info "Restore complete into $SOURCE_ROOT"
 }
 
 cmd_status() {
   local missing=0
+  local creds_source="none"
 
-  printf "%sOpenClaw Cloud Backup status%s\n" "$COLOR_BLUE" "$COLOR_RESET"
-  printf "Config file: %s\n" "$CONFIG_FILE"
-  printf "SOURCE_ROOT: %s\n" "$SOURCE_ROOT"
-  printf "LOCAL_BACKUP_DIR: %s\n" "$LOCAL_BACKUP_DIR"
-  printf "TMP_DIR: %s\n" "$TMP_DIR"
-  printf "UPLOAD: %s\n" "$UPLOAD"
-  printf "ENCRYPT: %s\n" "$ENCRYPT"
-  printf "BUCKET: %s\n" "${BUCKET:-<empty>}"
-  printf "PREFIX: %s\n" "$PREFIX"
-  printf "REGION: %s\n" "$REGION"
-  printf "ENDPOINT: %s\n" "${ENDPOINT:-<aws-default>}"
-  printf "RETENTION_COUNT: %s\n" "$RETENTION_COUNT"
-  printf "RETENTION_DAYS: %s\n" "$RETENTION_DAYS"
+  printf "%sOpenClaw Cloud Backup status%s\n\n" "$COLOR_BLUE" "$COLOR_RESET"
 
-  for bin_name in bash tar aws; do
+  printf "%sConfig sources:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "  OpenClaw config: %s\n" "$OPENCLAW_CONFIG"
+  if [ -f "$OPENCLAW_CONFIG" ]; then
+    printf "    (exists)\n"
+  else
+    printf "    (not found)\n"
+  fi
+  printf "  Local config: %s\n" "$CONFIG_FILE"
+  if [ -f "$CONFIG_FILE" ]; then
+    printf "    (exists)\n"
+  else
+    printf "    (not found)\n"
+  fi
+
+  printf "\n%sCloud settings:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "  BUCKET: %s\n" "${BUCKET:-<not set>}"
+  printf "  REGION: %s\n" "$REGION"
+  printf "  ENDPOINT: %s\n" "${ENDPOINT:-<aws-default>}"
+  printf "  PREFIX: %s\n" "$PREFIX"
+
+  printf "\n%sCredentials:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  if [ -n "${AWS_PROFILE:-}" ]; then
+    printf "  Using AWS_PROFILE: %s\n" "$AWS_PROFILE"
+    creds_source="profile"
+  elif [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
+    printf "  Using access key: %s...%s\n" "${AWS_ACCESS_KEY_ID:0:4}" "${AWS_ACCESS_KEY_ID: -4}"
+    creds_source="keys"
+  else
+    printf "  No credentials configured\n"
+  fi
+
+  printf "\n%sLocal settings:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  printf "  SOURCE_ROOT: %s\n" "$SOURCE_ROOT"
+  printf "  LOCAL_BACKUP_DIR: %s\n" "$LOCAL_BACKUP_DIR"
+  printf "  UPLOAD: %s\n" "$UPLOAD"
+  printf "  ENCRYPT: %s\n" "$ENCRYPT"
+  printf "  RETENTION_COUNT: %s\n" "$RETENTION_COUNT"
+  printf "  RETENTION_DAYS: %s\n" "$RETENTION_DAYS"
+
+  printf "\n%sDependencies:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  for bin_name in bash tar aws jq; do
     if command -v "$bin_name" >/dev/null 2>&1; then
-      printf "Binary %-8s: found\n" "$bin_name"
+      printf "  %-8s: found\n" "$bin_name"
     else
-      printf "Binary %-8s: missing\n" "$bin_name"
-      missing=1
+      printf "  %-8s: missing\n" "$bin_name"
+      if [ "$bin_name" != "jq" ]; then
+        missing=1
+      fi
     fi
   done
 
   if [ "$ENCRYPT" = "true" ]; then
     if command -v gpg >/dev/null 2>&1; then
-      printf "Binary %-8s: found (required by ENCRYPT=true)\n" "gpg"
+      printf "  %-8s: found (required by ENCRYPT=true)\n" "gpg"
     else
-      printf "Binary %-8s: missing (required by ENCRYPT=true)\n" "gpg"
+      printf "  %-8s: missing (required by ENCRYPT=true)\n" "gpg"
       missing=1
     fi
   fi
 
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "\n%s[WARN]%s jq not found. Cannot read secrets from OpenClaw config.\n" "$COLOR_YELLOW" "$COLOR_RESET"
+    printf "       Install jq or use environment variables for credentials.\n"
+  fi
+
   if [ "$missing" -eq 1 ]; then
-    log_warn "One or more required binaries are missing."
+    printf "\n%s[WARN]%s One or more required binaries are missing.\n" "$COLOR_YELLOW" "$COLOR_RESET"
+  fi
+
+  if [ -z "$BUCKET" ]; then
+    printf "\n%s[WARN]%s BUCKET not configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+  elif [ "$creds_source" = "none" ]; then
+    printf "\n%s[WARN]%s No credentials configured. Run: %s setup\n" "$COLOR_YELLOW" "$COLOR_RESET" "$SCRIPT_NAME"
+  fi
+}
+
+cmd_setup() {
+  local test_result
+
+  printf "%sOpenClaw Cloud Backup Setup%s\n\n" "$COLOR_BLUE" "$COLOR_RESET"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    log_error "jq is required for setup. Install it first:"
+    printf "  macOS:  brew install jq\n"
+    printf "  Debian: sudo apt install jq\n"
+    printf "  Arch:   sudo pacman -S jq\n"
+    exit 1
+  fi
+
+  printf "This skill stores secrets in OpenClaw config:\n"
+  printf "  %s\n" "$OPENCLAW_CONFIG"
+  printf "  Path: %s.*\n\n" "$SKILL_CONFIG_PATH"
+
+  printf "Required settings:\n"
+  printf "  • bucket          - S3 bucket name\n"
+  printf "  • region          - AWS region (default: us-east-1)\n"
+  printf "  • awsAccessKeyId  - Access key ID\n"
+  printf "  • awsSecretAccessKey - Secret access key\n"
+  printf "\nOptional settings:\n"
+  printf "  • endpoint        - Custom endpoint for non-AWS providers\n"
+  printf "  • awsProfile      - Use named AWS profile instead of keys\n"
+  printf "  • gpgPassphrase   - For client-side encryption\n"
+
+  printf "\n%sTo configure, ask your OpenClaw agent:%s\n" "$COLOR_GREEN" "$COLOR_RESET"
+  printf "  \"Set up openclaw-cloud-backup with bucket X and these credentials...\"\n"
+  printf "\nOr manually patch config:\n"
+  printf "  openclaw config patch 'skills.openclaw-cloud-backup.bucket=\"my-bucket\"'\n"
+  printf "  openclaw config patch 'skills.openclaw-cloud-backup.awsAccessKeyId=\"AKIA...\"'\n"
+  printf "  openclaw config patch 'skills.openclaw-cloud-backup.awsSecretAccessKey=\"...\"'\n"
+
+  # Check current config
+  printf "\n%sCurrent configuration:%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+  if [ -n "$BUCKET" ]; then
+    printf "  bucket: %s\n" "$BUCKET"
+  else
+    printf "  bucket: <not set>\n"
+  fi
+  if [ -n "$REGION" ]; then
+    printf "  region: %s\n" "$REGION"
+  fi
+  if [ -n "$ENDPOINT" ]; then
+    printf "  endpoint: %s\n" "$ENDPOINT"
+  fi
+  if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
+    printf "  credentials: configured (key: %s...)\n" "${AWS_ACCESS_KEY_ID:0:4}"
+  elif [ -n "${AWS_PROFILE:-}" ]; then
+    printf "  credentials: using profile '%s'\n" "$AWS_PROFILE"
+  else
+    printf "  credentials: <not set>\n"
+  fi
+
+  # Test connection if configured
+  if [ -n "$BUCKET" ] && { [ -n "${AWS_ACCESS_KEY_ID:-}" ] || [ -n "${AWS_PROFILE:-}" ]; }; then
+    printf "\n%sTesting connection...%s\n" "$COLOR_BLUE" "$COLOR_RESET"
+    export_aws_env_if_present
+    if aws_cli s3 ls "s3://$BUCKET/" --max-items 1 >/dev/null 2>&1; then
+      printf "%s✓ Successfully connected to bucket%s\n" "$COLOR_GREEN" "$COLOR_RESET"
+      printf "\nYou're ready to run:\n"
+      printf "  %s backup full\n" "$SCRIPT_NAME"
+    else
+      printf "%s✗ Failed to connect to bucket%s\n" "$COLOR_RED" "$COLOR_RESET"
+      printf "Check credentials and bucket permissions.\n"
+      printf "See: references/provider-setup.md\n"
+    fi
   fi
 }
 
@@ -680,6 +879,9 @@ main() {
       ;;
     status)
       cmd_status
+      ;;
+    setup)
+      cmd_setup
       ;;
     help|-h|--help)
       usage

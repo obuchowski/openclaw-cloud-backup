@@ -1,56 +1,104 @@
 ---
 name: openclaw-cloud-backup
-description: Back up and restore OpenClaw configuration to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use for simple local backups, cloud upload, restore, and retention cleanup.
-metadata: {"openclaw":{"requires":{"bins":["bash","tar","aws"],"config":["~/.openclaw-cloud-backup.conf"]}}}
+description: Back up and restore OpenClaw configuration to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use for local backups, cloud upload, restore, and retention cleanup.
+metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","aws","jq"]}}}
 ---
 
 # OpenClaw Cloud Backup
 
-Simple, script-first backup skill for OpenClaw configuration plus S3-compatible cloud upload.
+Back up OpenClaw configuration to any S3-compatible storage.
+
+## Requirements
+
+- **Binaries:** `bash`, `tar`, `aws` (AWS CLI v2), `jq`
+- **Optional:** `gpg` (if encryption enabled)
 
 ## References
 
-- `references/provider-setup.md` - how to obtain endpoint, region, keys, and least-privilege access for each provider
-- `references/security-troubleshooting.md` - security guardrails, checksum verification, and common failure fixes
+- `references/provider-setup.md` — endpoint, region, keys, and least-privilege setup per provider
+- `references/security-troubleshooting.md` — security guardrails and common failure fixes
 
-## Quick Start
+## Setup
 
-1. Create your local config:
-   ```bash
-   cp "{baseDir}/example.conf" "$HOME/.openclaw-cloud-backup.conf"
-   chmod 600 "$HOME/.openclaw-cloud-backup.conf"
-   ```
-2. Edit `~/.openclaw-cloud-backup.conf` with your bucket, endpoint (if non-AWS), and credentials.
-3. Run a first backup:
-   ```bash
-   bash "{baseDir}/scripts/openclaw-cloud-backup.sh" backup full
-   ```
-4. List cloud backups:
-   ```bash
-   bash "{baseDir}/scripts/openclaw-cloud-backup.sh" list
-   ```
+Secrets are stored in OpenClaw config at `skills.openclaw-cloud-backup.*`:
 
-## Workflow
+```
+bucket              - S3 bucket name (required)
+region              - AWS region (default: us-east-1)
+endpoint            - Custom endpoint for non-AWS providers
+awsAccessKeyId      - Access key ID
+awsSecretAccessKey  - Secret access key
+awsProfile          - Named AWS profile (alternative to keys)
+gpgPassphrase       - For client-side encryption (optional)
+```
 
-1. Validate setup with `status`.
-2. Run `backup full` for complete backup or `backup skills` / `backup settings` for a smaller scope.
-3. Confirm artifacts exist in cloud with `list`.
-4. Run `cleanup` periodically to prune old backups.
-5. Restore with `restore <backup-name> --dry-run` first, then run restore without dry-run.
+### Agent-assisted setup (recommended)
+
+Tell the agent:
+> "Set up openclaw-cloud-backup with bucket `my-backup-bucket`, region `us-east-1`, access key `AKIA...` and secret `...`"
+
+The agent will run `gateway config.patch` to store credentials securely.
+
+### Manual setup
+
+```bash
+# Store secrets in OpenClaw config
+openclaw config patch 'skills.openclaw-cloud-backup.bucket="my-bucket"'
+openclaw config patch 'skills.openclaw-cloud-backup.region="us-east-1"'
+openclaw config patch 'skills.openclaw-cloud-backup.awsAccessKeyId="AKIA..."'
+openclaw config patch 'skills.openclaw-cloud-backup.awsSecretAccessKey="..."'
+
+# For non-AWS providers, also set endpoint:
+openclaw config patch 'skills.openclaw-cloud-backup.endpoint="https://..."'
+```
+
+### Local settings (optional)
+
+For non-secret settings (paths, retention), copy the example config:
+
+```bash
+cp "{baseDir}/example.conf" "$HOME/.openclaw-cloud-backup.conf"
+```
+
+### Verify setup
+
+```bash
+bash "{baseDir}/scripts/openclaw-cloud-backup.sh" setup
+bash "{baseDir}/scripts/openclaw-cloud-backup.sh" status
+```
 
 ## Commands
 
-- `backup [full|skills|settings]`
-- `list`
-- `restore <backup-name> [--dry-run] [--yes]`
-- `cleanup`
-- `status`
-- `help`
+| Command | Description |
+|---------|-------------|
+| `setup` | Show configuration guide and test connection |
+| `status` | Print effective config and dependency status |
+| `backup [full\|skills\|settings]` | Create and upload backup |
+| `list` | List cloud backups |
+| `restore <name> [--dry-run] [--yes]` | Download and restore backup |
+| `cleanup` | Prune old backups by retention rules |
 
-## Guardrails
+## Workflow
 
-- Keep bucket private and use least-privilege credentials only.
-- Never commit `~/.openclaw-cloud-backup.conf`.
+1. Run `setup` to configure credentials (via agent or manually).
+2. Run `status` to verify everything is connected.
+3. Run `backup full` for first backup.
+4. Confirm with `list`.
+5. Schedule periodic `backup` and `cleanup` as needed.
+6. Restore with `restore <name> --dry-run` first, then without `--dry-run`.
+
+## Config Priority
+
+Settings are loaded in this order (first wins):
+
+1. **Environment variables** — for CI/automation
+2. **OpenClaw config** — `skills.openclaw-cloud-backup.*` (recommended)
+3. **Local config file** — `~/.openclaw-cloud-backup.conf` (legacy/fallback)
+
+## Security
+
+- Keep bucket private and use least-privilege credentials.
+- Secrets in OpenClaw config are protected by file permissions.
 - Always run restore with `--dry-run` before extracting.
-- Keep checksums enabled; do not restore if checksum validation fails.
-- If credentials are compromised, rotate keys immediately and review uploaded files.
+- Archive paths are validated to prevent traversal attacks.
+- If credentials are compromised, rotate keys immediately.
