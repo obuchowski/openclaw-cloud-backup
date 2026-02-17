@@ -74,7 +74,7 @@ bash "{baseDir}/scripts/cloud-backup.sh" <command>
 
 | Command | What it does |
 |---------|-------------|
-| `backup [full\|skills\|settings]` | Create archive + upload if configured. Default: `full` |
+| `backup [full\|workspace\|skills\|settings]` | Create archive + upload if configured. Default: `full` |
 | `list` | Show local + remote backups |
 | `restore <name> [--dry-run] [--yes]` | Restore from local or cloud. Always `--dry-run` first |
 | `cleanup` | Prune old archives (local: capped at 7; cloud: count + age) |

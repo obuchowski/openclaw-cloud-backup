@@ -8,6 +8,12 @@ OPENCLAW_STATE="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-$OPENCLAW_STATE/openclaw.json}"
 MAX_LOCAL=7  # hard cap on local archives regardless of retentionCount
 
+# Snapshot denylist — excluded from 'backup full' in snapshot mode.
+# Everything else under $OPENCLAW_STATE is included.
+SNAPSHOT_DENY=(backups .cache .npm .local .config .cursor .codex
+               logs completions delivery-queue media
+               "*.bak" "*.bak-*" "*.bak.[0-9]*")
+
 die()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo ":: $*"; }
 warn() { echo "WARN: $*" >&2; }
@@ -34,7 +40,6 @@ load_config() {
   ENCRYPT="$(cfg config encrypt)";           ENCRYPT="${ENCRYPT:-false}"
   KEEP="$(cfg config retentionCount)";       KEEP="${KEEP:-10}"
   DAYS="$(cfg config retentionDays)";        DAYS="${DAYS:-30}"
-
   : "${AWS_ACCESS_KEY_ID:=$(cfg env ACCESS_KEY_ID)}"
   : "${AWS_SECRET_ACCESS_KEY:=$(cfg env SECRET_ACCESS_KEY)}"
   : "${AWS_SESSION_TOKEN:=$(cfg env SESSION_TOKEN)}"
@@ -134,25 +139,44 @@ arc_ts() { basename "$1" | sed -n 's/.*_\([0-9]\{8\}_[0-9]\{6\}\)_.*/\1/p' | tr 
 
 cmd_backup() {
   local mode="${1:-full}"
-  case "$mode" in full|skills|settings) ;; *) die "mode: full, skills, settings" ;; esac
+  case "$mode" in full|workspace|skills|settings) ;; *) die "mode: full, workspace, skills, settings" ;; esac
   need tar; [ -d "$SOURCE" ] || die "source missing: $SOURCE"
 
-  local -a cands paths=()
-  case "$mode" in
-    full)     cands=(openclaw.json settings.json settings.local.json projects.json skills commands mcp contexts templates modules workspace) ;;
-    skills)   cands=(skills commands) ;;
-    settings) cands=(openclaw.json settings.json settings.local.json projects.json mcp) ;;
-  esac
-  for c in "${cands[@]}"; do [ -e "$SOURCE/$c" ] && paths+=("$c"); done
-  [ ${#paths[@]} -gt 0 ] || die "nothing to back up ($mode)"
+  # Prevent concurrent runs
+  LOCKDIR="$BACKUPS/.lock"
+  mkdir "$LOCKDIR" 2>/dev/null || die "backup already running (lock: $LOCKDIR)"
+  trap 'rmdir "$LOCKDIR" 2>/dev/null || true; rm -f "$SOURCE/.backup-manifest.json"' EXIT
 
   local ts host arc payload
   ts="$(date +%Y%m%d_%H%M%S)"
   host="$(hostname -s 2>/dev/null || hostname)"
   arc="$BACKUPS/openclaw_${mode}_${ts}_${host//[^a-zA-Z0-9._-]/_}.tar.gz"
 
-  info "Creating $mode backup (${#paths[@]} items)"
-  tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}"
+  # Embed manifest in archive
+  printf '{"v":1,"mode":"%s","ts":"%s","host":"%s","os":"%s"}\n' \
+    "$mode" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$host" "$(uname -s)" \
+    > "$SOURCE/.backup-manifest.json"
+
+  if [ "$mode" = "full" ]; then
+    # Snapshot: tar entire state dir minus denylist
+    local -a ex=()
+    for x in "${SNAPSHOT_DENY[@]}"; do ex+=(--exclude="$x"); done
+    info "Creating $mode snapshot"
+    tar -czf "$arc" -C "$SOURCE" --ignore-failed-read "${ex[@]}" .
+  else
+    # Allowlist: specific files/dirs only (workspace, skills, settings)
+    local -a cands paths=()
+    case "$mode" in
+      workspace) cands=(openclaw.json settings.json settings.local.json projects.json skills commands mcp contexts templates modules workspace) ;;
+      skills)    cands=(skills commands) ;;
+      settings)  cands=(openclaw.json settings.json settings.local.json projects.json mcp) ;;
+    esac
+    for c in "${cands[@]}"; do [ -e "$SOURCE/$c" ] && paths+=("$c"); done
+    [ ${#paths[@]} -gt 0 ] || die "nothing to back up ($mode)"
+    info "Creating $mode backup (${#paths[@]} items)"
+    tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}" .backup-manifest.json
+  fi
+  rm -f "$SOURCE/.backup-manifest.json"
   payload="$arc"
 
   if [ "$ENCRYPT" = "true" ]; then
@@ -363,7 +387,7 @@ case "$cmd" in
   setup)   cmd_setup ;;
   help|-h|--help)
     echo "Usage: $(basename "$0") <backup|list|restore|cleanup|status|setup>"
-    echo "  backup [full|skills|settings]     Create backup (default: full)"
+    echo "  backup [full|workspace|skills|settings]  Create backup (default: full)"
     echo "  list                               List local (and cloud) backups"
     echo "  restore <name> [--dry-run] [--yes] Restore from local or cloud"
     echo "  cleanup                            Prune old local + remote backups"
