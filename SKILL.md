@@ -1,6 +1,6 @@
 ---
 name: cloud-backup
-description: Back up and restore OpenClaw state. Creates local archives and uploads to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces). Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
+description: Back up and restore OpenClaw state. Creates local archives and uploads to S3-compatible cloud storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, and more). Use when the user says "backup", "back up", "make a backup", "restore", or anything about backing up OpenClaw.
 metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","aws"]}}}
 ---
 
@@ -8,7 +8,7 @@ metadata: {"openclaw":{"emoji":"☁️","requires":{"bins":["bash","tar","jq","a
 
 Backs up OpenClaw state to a local archive and uploads it to cloud storage.
 
-**Do not ask** what to back up, where to store it, or anything about destinations. Just follow the steps below.
+Follow the steps below. Inform the user about implicit defaults applied after execution.
 
 ## Backup procedure (follow every step)
 
@@ -30,14 +30,14 @@ ask the user:
 
 > "Your backups are not encrypted. Archives contain config, credentials, and API keys in cleartext. Want to set a passphrase? (AES-256, just the passphrase needed to restore — no key files.)"
 
-- If user provides a passphrase → write both via `gateway config.patch`:
+- If user provides a passphrase → write both via `gateway config.patch` and tell the user what was saved:
   - `skills.entries.cloud-backup.config.encrypt = true`
   - `skills.entries.cloud-backup.env.GPG_PASSPHRASE = "<passphrase>"`
   Then re-run the backup so the archive is encrypted.
-- If user says no / skip → continue to Step 3. **Ask again next time.**
+- If user says no / skip → continue to Step 3.
 - If the warning is not present (encryption already enabled) → continue to Step 3.
 
-**Do not skip this step.** Ask every time encryption is off. Backups contain secrets.
+Always execute this step and report the result. Backups may contain secrets — prompt every time encryption is off.
 
 ### Step 3: Check script output for warnings
 
@@ -47,18 +47,18 @@ Look at the script output. If it contains `WARN: Cloud storage is not configured
 
 Tell the user the backup was saved locally, then ask:
 
-> "Cloud storage isn't configured yet — backups are local only. Want to set up cloud upload? I support AWS S3, Cloudflare R2, Backblaze B2, MinIO, and DigitalOcean Spaces."
+> "Cloud storage isn't configured yet — backups are local only. Want to set up cloud upload? I support AWS S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, or any other S3-compatible service."
 
 - If user says yes → go to **Cloud setup** section below, then re-run the backup.
-- If user says no / local-only → set `config.upload=false` via `gateway config.patch`. Done.
+- If user says no / local-only → set `config.upload=false` via `gateway config.patch` and confirm the change to the user. Done.
 
-**Do not skip this step.** The skill is called cloud-backup — always offer cloud setup when it's missing.
+Always execute this step — offer cloud setup when it's missing and report what was configured.
 
 ### Step 5: Report result and ensure scheduling
 
 Report the backup paths from the script output to the user.
 
-Then check if a daily cron job already exists for cloud-backup (`cron action=list`). If **no cron job exists**, create one automatically — don't ask, just do it and tell the user:
+Then check if a daily cron job already exists for cloud-backup (`cron action=list`). If **no cron job exists**, create one with the default schedule and tell the user:
 
 ```json
 {
@@ -68,11 +68,11 @@ Then check if a daily cron job already exists for cloud-backup (`cron action=lis
 }
 ```
 
-Default: **daily at 2 AM**. Use a different schedule only if the user explicitly asked for one.
+Default: **daily at 2 AM**. Use a different schedule if it was explicitly asked for one.
 
 Tell the user: "Scheduled daily backup at 2 AM." (or whatever time was set).
 
-**Do not skip this step.** Every backup run must have a cron job behind it.
+This step should be executed by default unless user asked not to do it. Report about the result — cron job created or failed to be created.
 
 ---
 
