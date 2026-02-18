@@ -64,7 +64,7 @@ load_config() {
     CLOUD=true
   fi
 
-  mkdir -p "$BACKUPS" "$BACKUPS/.tmp"
+  mkdir -p "$BACKUPS" "$BACKUPS/_tmp"
 }
 
 s3() {
@@ -152,10 +152,10 @@ cmd_backup() {
   fi
 
   # Prevent concurrent runs
-  LOCKDIR="$BACKUPS/.lock"
+  LOCKDIR="$BACKUPS/_lock"
   mkdir "$LOCKDIR" 2>/dev/null || die "backup already running (lock: $LOCKDIR)"
-  # Controlled lifecycle: this skill owns .backup-manifest.json for each run.
-  trap 'rmdir "$LOCKDIR" 2>/dev/null || true; rm -f "$SOURCE/.backup-manifest.json"' EXIT
+  # Controlled lifecycle: this skill owns backup-manifest.json for each run.
+  trap 'rmdir "$LOCKDIR" 2>/dev/null || true; rm -f "$SOURCE/backup-manifest.json"' EXIT
 
   local ts host arc payload
   ts="$(date +%Y%m%d_%H%M%S)"
@@ -164,8 +164,8 @@ cmd_backup() {
 
   # Embed manifest in archive
   printf '{"v":1,"mode":"%s","ts":"%s","host":"%s","os":"%s"}\n' \
-    "$mode" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$host" "$(uname -s)" \
-    > "$SOURCE/.backup-manifest.json"
+    "$mode" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$host" "${OSTYPE:-unknown}" \
+    > "$SOURCE/backup-manifest.json"
 
   if [ "$mode" = "full" ]; then
     # Snapshot: tar entire state dir minus denylist
@@ -189,9 +189,9 @@ cmd_backup() {
     for c in "${cands[@]}"; do [ -e "$SOURCE/$c" ] && paths+=("$c"); done
     [ ${#paths[@]} -gt 0 ] || die "nothing to back up ($mode)"
     info "Creating $mode backup (${#paths[@]} items)"
-    tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}" .backup-manifest.json
+    tar -czf "$arc" -C "$SOURCE" --exclude=backups "${paths[@]}" backup-manifest.json
   fi
-  rm -f "$SOURCE/.backup-manifest.json"
+  rm -f "$SOURCE/backup-manifest.json"
   payload="$arc"
 
   if [ "$ENCRYPT" = "true" ]; then
@@ -254,7 +254,7 @@ cmd_cleanup() {
 
   # Remote: count + age retention
   if [ "$CLOUD" = "true" ]; then
-    local tmp="$BACKUPS/.tmp/ls-$$.txt"
+    local tmp="$BACKUPS/_tmp/ls-$$.txt"
     s3 ls "s3://$BUCKET/$PREFIX" --recursive > "$tmp"
     local -a rk=()
     while read -r _ _ _ key; do
@@ -301,7 +301,7 @@ cmd_restore() {
     src="$BACKUPS/$name"; info "Restoring from local"
   elif [ "$CLOUD" = "true" ]; then
     local key="$name"; [[ "$key" == */* ]] || key="${PREFIX}${key}"
-    local dir="$BACKUPS/.tmp/restore-$$"; mkdir -p "$dir"
+    local dir="$BACKUPS/_tmp/restore-$$"; mkdir -p "$dir"
     src="$dir/$(basename "$key")"
     info "Downloading s3://$BUCKET/$key"
     s3 cp "s3://$BUCKET/$key" "$src"

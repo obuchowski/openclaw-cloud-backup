@@ -29,7 +29,8 @@ openclaw config patch 'skills.entries.cloud-backup.env.ACCESS_KEY_ID="<keyID>"'
 openclaw config patch 'skills.entries.cloud-backup.env.SECRET_ACCESS_KEY="<applicationKey>"'
 ```
 
-## Notes
+## Notesopenclaw config patch 'skills.entries.cloud-backup.config.endpoint="https://s3.<REGION>.backblazeb2.com"'
+
 
 - B2 free tier: 10 GB storage, 1 GB/day egress.
 - Region is part of the endpoint URL — they must match.
