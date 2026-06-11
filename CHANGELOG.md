@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.1 — 2026-06-11
+
+### Changed
+
+- Skill description polished (secrets-safe encryption, lean modes, opt-in
+  cron, staged restore) — the explicit-intent activation gate is unchanged.
+  No functional changes; identical script behavior to 2.0.0.
+
 ## 2.0.0 — 2026-06-11
 
 Complete redesign: the skill is now **the cloud layer for OpenClaw's native

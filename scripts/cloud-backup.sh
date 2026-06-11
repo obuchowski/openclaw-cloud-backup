@@ -10,7 +10,7 @@
 # still works but is DEPRECATED and warns on every run.
 set -uo pipefail
 
-VERSION="2.0.0"
+VERSION="2.0.1"
 
 # --- locations ---------------------------------------------------------------
 STATE_DIR="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
