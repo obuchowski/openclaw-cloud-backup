@@ -1,3 +1,5 @@
 .DS_Store
 *.log
 cloud-backup/
+_meta.json
+.clawhub/
