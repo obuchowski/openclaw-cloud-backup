@@ -1,6 +1,6 @@
 ---
 name: cloud-backup
-description: Encrypt and upload OpenClaw state backups to S3-compatible storage (S3, R2, B2, MinIO). Use only when the user explicitly asks to back up or restore OpenClaw.
+description: Secrets-safe encrypted OpenClaw backups to S3/R2/B2/MinIO — lean modes, opt-in cron, staged restore. Use only when explicitly asked to back up/restore OpenClaw.
 metadata: {"openclaw":{"emoji":"☁️","homepage":"https://github.com/obuchowski/openclaw-cloud-backup","os":["linux","darwin"],"requires":{"bins":["bash","tar","jq"]},"install":[{"kind":"brew","formula":"awscli","bins":["aws"]},{"kind":"brew","formula":"gnupg","bins":["gpg"]}],"primaryEnv":"CLOUD_BACKUP_GPG_PASSPHRASE"}}
 ---
 
