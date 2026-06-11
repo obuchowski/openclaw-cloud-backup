@@ -51,6 +51,14 @@ backup**, and was rebuilt around the ClawHub security-scan findings of v1.1.5
 
 ### Added
 
+- **OpenClaw secret-store integration**: `config.accessKeyRef` /
+  `secretKeyRef` / `sessionTokenRef` / `passphraseRef` accept OpenClaw
+  SecretRefs (`{source: env|file|exec, provider, id}` or `$NAME` templates),
+  resolved against the instance's `.secrets.providers` with the gateway's own
+  semantics (JSON-pointer file stores, env vars, protocolVersion-1 exec
+  backends such as 1Password wrappers). Configured-but-unresolvable refs
+  abort the run (exit 13/14) and show as `UNRESOLVABLE` in `status` — never a
+  silent fallback to a weaker tier.
 - `verify [name|--latest] [--deep]` — checksum + decrypt + listing; `--deep`
   also runs the native `openclaw backup verify` on the decrypted archive.
 - Automatic post-backup verification (`config.verifyAfterBackup`, default

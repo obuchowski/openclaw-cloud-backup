@@ -63,9 +63,13 @@ bash scripts/cloud-backup.sh <command>
 
 - **Credentials never live in OpenClaw config.** S3 keys go in an AWS named
   profile (or operator-managed env); the GPG passphrase goes in a chmod-600
-  passphrase file (or an OpenClaw SecretRef). Why it matters: backups archive
-  `openclaw.json` — a secret stored there would ride inside every archive.
-  v1-style plaintext config still works but warns loudly; removed in v3.
+  passphrase file. Why it matters: backups archive `openclaw.json` — a secret
+  stored there would ride inside every archive. v1-style plaintext config
+  still works but warns loudly; removed in v3.
+- **Or hook into OpenClaw's own secret store.** `config.accessKeyRef` /
+  `secretKeyRef` / `passphraseRef` accept OpenClaw SecretRefs resolved against
+  your `.secrets.providers` (file stores, env, exec backends like 1Password)
+  — one credential model for the whole instance.
 - **Encryption is forced for sensitive scopes.** The script detects whether
   the archive would contain real secret material and refuses plaintext output
   for it.

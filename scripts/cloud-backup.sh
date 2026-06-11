@@ -122,6 +122,27 @@ load_config() {
   DEP_S3=false; DEP_GPG=false
   if [ -n "$(cfg env ACCESS_KEY_ID)" ] || [ -n "$(cfg env SECRET_ACCESS_KEY)" ]; then DEP_S3=true; fi
   if [ -n "$(cfg env GPG_PASSPHRASE)" ]; then DEP_GPG=true; fi
+  # OpenClaw secret-store refs (between process env and profile in precedence).
+  # A configured-but-unresolvable ref is an error, never a silent fallthrough.
+  S3_REF_ERROR=""
+  local ref_ak ref_sk ref_st akj skj stj
+  akj="$(cfg_ref accessKeyRef)"; skj="$(cfg_ref secretKeyRef)"; stj="$(cfg_ref sessionTokenRef)"
+  if { [ -z "$orig_ak" ] || [ -z "$orig_sk" ]; } && { [ -n "$akj" ] || [ -n "$skj" ]; }; then
+    if [ -n "$akj" ] && [ -n "$skj" ]; then
+      if ref_ak="$(resolve_secret_ref "$akj")" && ref_sk="$(resolve_secret_ref "$skj")"; then
+        AWS_ACCESS_KEY_ID="$ref_ak"; AWS_SECRET_ACCESS_KEY="$ref_sk"
+        if [ -n "$stj" ]; then
+          ref_st="$(resolve_secret_ref "$stj")" && AWS_SESSION_TOKEN="$ref_st"
+        fi
+        S3_REF_SOURCE=true
+      else
+        S3_REF_ERROR="config.accessKeyRef/secretKeyRef configured but unresolvable"
+      fi
+    else
+      S3_REF_ERROR="configure BOTH config.accessKeyRef and config.secretKeyRef (only one is set)"
+    fi
+  fi
+
   : "${AWS_ACCESS_KEY_ID:=$(cfg env ACCESS_KEY_ID)}"
   : "${AWS_SECRET_ACCESS_KEY:=$(cfg env SECRET_ACCESS_KEY)}"
   : "${AWS_SESSION_TOKEN:=$(cfg env SESSION_TOKEN)}"
@@ -130,6 +151,8 @@ load_config() {
 
   S3_SOURCE="not configured"
   if [ -n "$orig_ak" ] && [ -n "$orig_sk" ]; then S3_SOURCE="process env (operator-managed)"
+  elif [ "${S3_REF_SOURCE:-false}" = "true" ]; then S3_SOURCE="OpenClaw secret refs (config.accessKeyRef/secretKeyRef)"
+  elif [ -n "$S3_REF_ERROR" ]; then S3_SOURCE="secret refs UNRESOLVABLE: $S3_REF_ERROR"
   elif [ -n "$AWS_PROFILE" ]; then S3_SOURCE="aws profile '$AWS_PROFILE'"
   elif [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then S3_SOURCE="PLAINTEXT in openclaw.json (DEPRECATED)"
   fi
@@ -145,6 +168,8 @@ load_config() {
      { [ -n "$AWS_PROFILE" ] || { [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; }; }; then
     CLOUD=true
   fi
+  # Broken refs are an error state, not a fallthrough to weaker tiers.
+  [ -n "$S3_REF_ERROR" ] && CLOUD=false
 
   mkdir -p "$LOCAL_DIR/.staging"
   chmod 700 "$LOCAL_DIR" 2>/dev/null || true
@@ -176,33 +201,152 @@ print_deprecations() {
   fi
 }
 
+# --- OpenClaw secret-store integration (config.*Ref keys) ----------------------
+# The skill can consume the INSTANCE's secret storage instead of separate files:
+# config.accessKeyRef / secretKeyRef / sessionTokenRef / passphraseRef accept
+# OpenClaw SecretRef objects ({source: env|file|exec, provider, id}) or
+# $NAME / ${NAME} env templates, resolved against .secrets.providers in
+# openclaw.json with the same semantics the gateway uses (file providers:
+# JSON-pointer ids by default; exec providers: protocolVersion-1 stdin/stdout).
+
+cfg_ref() { # $1 key → compact JSON of config.<key> (object or string), empty if absent
+  has jq && [ -f "$CONFIG_FILE" ] || return 0
+  jq -c ".skills.entries[\"cloud-backup\"].config.$1 // empty" "$CONFIG_FILE" 2>/dev/null || true
+}
+
+resolve_secret_ref() { # $1 = compact JSON (SecretRef object or string); echoes value
+  local input="$1" t
+  t="$(jq -r 'type' <<<"$input" 2>/dev/null)" || { err "invalid secret ref"; return 1; }
+
+  if [ "$t" = "string" ]; then
+    local s n
+    s="$(jq -r . <<<"$input")"
+    case "$s" in
+      '${'*'}') n="${s:2}"; n="${n%\}}" ;;
+      '$'*)     n="${s#\$}" ;;
+      *)
+        # Literal secret in a *Ref key: works, but it is plaintext in config —
+        # the sensitivity verdict will flag it. Prefer a real ref.
+        printf '%s' "$s"; return 0 ;;
+    esac
+    [ -n "${!n:-}" ] || { err "env var \$$n (from secret ref) is unset"; return 1; }
+    printf '%s' "${!n}"
+    return 0
+  fi
+
+  [ "$t" = "object" ] || { err "secret ref must be an object or string"; return 1; }
+  local source provider id pconf
+  source="$(jq -r '.source // empty' <<<"$input")"
+  provider="$(jq -r '.provider // "default"' <<<"$input")"
+  id="$(jq -r '.id // empty' <<<"$input")"
+  if [ -z "$source" ] || [ -z "$id" ]; then
+    err "secret ref needs source and id"; return 1
+  fi
+
+  case "$source" in
+    env)
+      [ -n "${!id:-}" ] || { err "env var \$$id (secret ref, provider '$provider') is unset"; return 1; }
+      printf '%s' "${!id}"
+      ;;
+    file)
+      pconf="$(jq -c --arg p "$provider" '.secrets.providers[$p] // empty' "$CONFIG_FILE" 2>/dev/null)"
+      [ -n "$pconf" ] || { err "secret provider '$provider' is not configured (.secrets.providers)"; return 1; }
+      local fpath fmode v
+      fpath="$(expand_path "$(jq -r '.path // empty' <<<"$pconf")")"
+      fmode="$(jq -r '.mode // "json"' <<<"$pconf")"
+      [ -f "$fpath" ] || { err "secret store file not found: $fpath"; return 1; }
+      if [ "$fmode" = "singleValue" ]; then
+        v="$(cat "$fpath")"
+        [ -n "$v" ] || { err "secret store file is empty: $fpath"; return 1; }
+        printf '%s' "$v"
+      else
+        # id is a JSON pointer (e.g. /cloudBackup/gpgPassphrase); unescape ~1 → / and ~0 → ~
+        v="$(jq -er --arg ptr "$id" \
+          'getpath($ptr | ltrimstr("/") | split("/") | map(gsub("~1"; "/") | gsub("~0"; "~"))) | select(type == "string")' \
+          "$fpath" 2>/dev/null)" \
+          || { err "pointer '$id' not found (or not a string) in $fpath"; return 1; }
+        printf '%s' "$v"
+      fi
+      ;;
+    exec)
+      pconf="$(jq -c --arg p "$provider" '.secrets.providers[$p] // empty' "$CONFIG_FILE" 2>/dev/null)"
+      [ -n "$pconf" ] || { err "secret provider '$provider' is not configured (.secrets.providers)"; return 1; }
+      if jq -e '.pluginIntegration' <<<"$pconf" >/dev/null 2>&1; then
+        err "exec provider '$provider' uses a plugin integration — only resolvable inside the gateway runtime"
+        return 1
+      fi
+      local cmd jsononly out v
+      cmd="$(jq -r '.command // empty' <<<"$pconf")"
+      [ -n "$cmd" ] || { err "exec provider '$provider' has no command"; return 1; }
+      jsononly="$(jq -r 'if .jsonOnly == false then "false" else "true" end' <<<"$pconf")"
+      local -a args=()
+      while IFS= read -r a; do args+=("$a"); done < <(jq -r '.args // [] | .[]' <<<"$pconf")
+      out="$(jq -nc --arg p "$provider" --arg id "$id" '{protocolVersion: 1, provider: $p, ids: [$id]}' \
+        | "$cmd" "${args[@]}")" || { err "exec provider '$provider' ($cmd) failed"; return 1; }
+      if v="$(jq -er --arg id "$id" 'select(.protocolVersion == 1) | .values[$id] | select(type == "string")' <<<"$out" 2>/dev/null)"; then
+        printf '%s' "$v"
+      elif [ "$jsononly" = "false" ] && [ -n "$out" ]; then
+        printf '%s' "$out"   # raw single-value response (jsonOnly: false)
+      else
+        err "exec provider '$provider' returned no value for id '$id'"; return 1
+      fi
+      ;;
+    *)
+      err "unsupported secret ref source: $source"; return 1
+      ;;
+  esac
+}
+
 # --- passphrase ---------------------------------------------------------------
 # Resolution: GPG_PASSPHRASE env > CLOUD_BACKUP_GPG_PASSPHRASE env (OpenClaw
 # secret-ref via skill apiKey/primaryEnv) > config.passphraseFile > DEPRECATED
 # v1 plaintext config. The passphrase NEVER appears on a command line.
 PASSPHRASE=""
 PASS_SOURCE="not configured"
-resolve_passphrase() {
+PASS_ERROR=""
+resolve_passphrase() { # [$1=soft] — soft mode reports broken refs instead of exiting
   if [ -n "${GPG_PASSPHRASE:-}" ]; then
     PASSPHRASE="$GPG_PASSPHRASE"; PASS_SOURCE="env GPG_PASSPHRASE (operator-managed)"; return 0
   fi
   if [ -n "${CLOUD_BACKUP_GPG_PASSPHRASE:-}" ]; then
-    PASSPHRASE="$CLOUD_BACKUP_GPG_PASSPHRASE"; PASS_SOURCE="env CLOUD_BACKUP_GPG_PASSPHRASE (OpenClaw secret ref)"; return 0
+    PASSPHRASE="$CLOUD_BACKUP_GPG_PASSPHRASE"; PASS_SOURCE="env CLOUD_BACKUP_GPG_PASSPHRASE (OpenClaw apiKey ref)"; return 0
+  fi
+  local prefj
+  prefj="$(cfg_ref passphraseRef)"
+  if [ -n "$prefj" ]; then
+    # Configured ref must resolve — never fall through to a weaker tier.
+    if ! PASSPHRASE="$(resolve_secret_ref "$prefj")" || [ -z "$PASSPHRASE" ]; then
+      PASS_ERROR="config.passphraseRef is configured but could not be resolved"
+      [ "${1:-}" = "soft" ] && return 1
+      fail "$E_PASSPHRASE" "$PASS_ERROR"
+    fi
+    PASS_SOURCE="OpenClaw secret ref (config.passphraseRef)"
+    return 0
   fi
   if [ -n "$PASSFILE" ]; then
-    [ -f "$PASSFILE" ] || fail "$E_PASSPHRASE" "passphrase file not found: $PASSFILE"
     local mode perm
+    if [ ! -f "$PASSFILE" ]; then
+      PASS_ERROR="passphrase file not found: $PASSFILE"
+      [ "${1:-}" = "soft" ] && return 1
+      fail "$E_PASSPHRASE" "$PASS_ERROR"
+    fi
     mode="$(stat -c %a "$PASSFILE" 2>/dev/null || stat -f %Lp "$PASSFILE" 2>/dev/null || echo "")"
     if [ -n "$mode" ]; then
       perm=$(( 8#$mode ))
       if (( perm & 0007 )); then
-        fail "$E_PASSPHRASE" "passphrase file is world-readable — refusing. Fix: chmod 600 $PASSFILE"
+        PASS_ERROR="passphrase file is world-readable — refusing. Fix: chmod 600 $PASSFILE"
+        [ "${1:-}" = "soft" ] && return 1
+        fail "$E_PASSPHRASE" "$PASS_ERROR"
       elif (( perm & 0070 )); then
         warn "passphrase file $PASSFILE has mode $mode; expected 600"
       fi
     fi
     PASSPHRASE="$(cat "$PASSFILE")"
-    [ -n "$PASSPHRASE" ] || fail "$E_PASSPHRASE" "passphrase file is empty: $PASSFILE"
+    if [ -z "$PASSPHRASE" ]; then
+      PASS_ERROR="passphrase file is empty: $PASSFILE"
+      [ "${1:-}" = "soft" ] && return 1
+      fail "$E_PASSPHRASE" "$PASS_ERROR"
+    fi
     PASS_SOURCE="file $PASSFILE (mode ${mode:-?})"
     return 0
   fi
@@ -580,6 +724,7 @@ preflight() { # $1 mode, $2 do_upload(bool)
   fi
 
   if [ "$2" = "true" ]; then
+    [ -z "$S3_REF_ERROR" ] || fail "$E_CLOUD" "S3 secret refs are configured but broken: $S3_REF_ERROR"
     # prefix-scoped first (works with prefix-scoped tokens), then bucket root
     s3 ls "s3://$BUCKET/$PREFIX" >/dev/null 2>&1 || s3 ls "s3://$BUCKET/" >/dev/null 2>&1 || \
       fail "$E_CLOUD" "cloud unreachable or bad credentials (bucket: $BUCKET, source: $S3_SOURCE)"
@@ -600,9 +745,9 @@ decide_encryption() { # $1 mode; sets DO_ENCRYPT + enforces the secrets policy
   fi
 
   if [ "$DO_ENCRYPT" = "true" ]; then
-    if ! resolve_passphrase; then
+    if ! resolve_passphrase "$([ "$DRY_RUN" = "true" ] && echo soft)"; then
       if [ "$DRY_RUN" = "true" ]; then
-        warn "no passphrase configured — a real run would FAIL (exit $E_PASSPHRASE) until config.passphraseFile is set"
+        warn "${PASS_ERROR:-no passphrase configured} — a real run would FAIL (exit $E_PASSPHRASE)"
       elif [ "$required" = "true" ] && [ "$FORCE_PLAINTEXT" = "true" ] && [ -t 0 ]; then
         warn "FORCED PLAINTEXT for a secret-material scope (interactive --force-plaintext)"
         DO_ENCRYPT=false
@@ -637,6 +782,9 @@ cmd_backup() {
 
   local do_upload=false
   [ "$UPLOAD" = "true" ] && [ "$CLOUD" = "true" ] && [ "$NO_UPLOAD" != "true" ] && do_upload=true
+  if [ "$UPLOAD" = "true" ] && [ "$NO_UPLOAD" != "true" ] && [ -n "$S3_REF_ERROR" ] && [ "$DRY_RUN" != "true" ]; then
+    fail "$E_CLOUD" "S3 secret refs are configured but broken: $S3_REF_ERROR"
+  fi
   if [ "$UPLOAD" = "true" ] && [ "$CLOUD" != "true" ] && [ "$NO_UPLOAD" != "true" ]; then
     warn "Cloud storage is not configured — backup will be local only."
   fi
@@ -978,8 +1126,10 @@ cmd_status() {
   echo
   echo "Credentials"
   echo "  S3:          $S3_SOURCE"
-  if resolve_passphrase 2>/dev/null; then
+  if resolve_passphrase soft 2>/dev/null; then
     echo "  Passphrase:  $PASS_SOURCE"
+  elif [ -n "$PASS_ERROR" ]; then
+    echo "  Passphrase:  UNRESOLVABLE ✗ — $PASS_ERROR"
   else
     echo "  Passphrase:  not configured ✗ (encryption unavailable)"
   fi

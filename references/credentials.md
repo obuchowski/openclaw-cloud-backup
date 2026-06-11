@@ -19,10 +19,16 @@ The recommended setup is two chmod-600 files:
 1. Process env `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` /
    `AWS_SESSION_TOKEN` — operator-injected (systemd `EnvironmentFile=`,
    gateway environment). Never overridden.
-2. `config.profile` → named profile in `~/.aws/credentials` (mode 600).
-   **Recommended.** The skill passes `--profile`; the aws CLI reads the
-   standard store. The secret never touches OpenClaw config or this chat.
-3. DEPRECATED: `skills.entries.cloud-backup.env.ACCESS_KEY_ID` /
+2. **OpenClaw secret refs** — `config.accessKeyRef` + `config.secretKeyRef`
+   (+ optional `config.sessionTokenRef`). See "Using the OpenClaw secret
+   store" below. A configured-but-unresolvable ref aborts the run (exit 13) —
+   never a silent fallthrough to a weaker tier.
+3. `config.profile` → named profile in `~/.aws/credentials` (mode 600).
+   **Recommended simple default.** The skill passes `--profile`; the aws CLI
+   reads its own standard store. The secret never touches OpenClaw config or
+   this chat — and `~/.aws` is OUTSIDE the backup scope, so the key never
+   travels inside the archives it protects.
+4. DEPRECATED: `skills.entries.cloud-backup.env.ACCESS_KEY_ID` /
    `.SECRET_ACCESS_KEY` / `.SESSION_TOKEN` plaintext in openclaw.json.
    Still works in v2; warns loudly on every run; removed in v3.
 
@@ -30,27 +36,60 @@ The recommended setup is two chmod-600 files:
 
 1. Process env `GPG_PASSPHRASE` — operator-injected.
 2. Process env `CLOUD_BACKUP_GPG_PASSPHRASE` — injected by OpenClaw from
-   `skills.entries.cloud-backup.apiKey`, which may be a **SecretRef** into
-   your existing OpenClaw secret store, e.g.:
-
-   ```json
-   { "skills": { "entries": { "cloud-backup": {
-     "apiKey": { "source": "file", "provider": "default", "id": "/cloudBackup/gpgPassphrase" }
-   } } } }
-   ```
-
-   Advanced tier: it resolves only inside the OpenClaw agent runtime, so a
-   bare-shell `cloud-backup.sh backup` won't see it. Prefer the passphrase
-   file unless you already run a secret store.
-3. `config.passphraseFile` — path to a mode-600 file. **Recommended.** The
-   script refuses world-readable files and warns on group access. The
-   passphrase is passed to gpg over a file descriptor — never on a command
-   line (v1 leaked it into `ps`/`/proc/*/cmdline`).
-4. DEPRECATED: `skills.entries.cloud-backup.env.GPG_PASSPHRASE` plaintext in
+   `skills.entries.cloud-backup.apiKey` (which may itself be a SecretRef).
+   Resolves only inside the OpenClaw agent runtime, so a bare-shell
+   `cloud-backup.sh backup` won't see it — prefer `passphraseRef` below.
+3. **OpenClaw secret ref** — `config.passphraseRef` (below). Works from any
+   shell; aborts with exit 14 if configured but unresolvable.
+4. `config.passphraseFile` — path to a mode-600 file. **Recommended simple
+   default.** The script refuses world-readable files and warns on group
+   access. The passphrase is passed to gpg over a file descriptor — never on
+   a command line (v1 leaked it into `ps`/`/proc/*/cmdline`).
+5. DEPRECATED: `skills.entries.cloud-backup.env.GPG_PASSPHRASE` plaintext in
    openclaw.json. Warns on every run; removed in v3.
 
 `status` always prints where each secret resolved from — check it whenever
 you are unsure which tier is active.
+
+## Using the OpenClaw secret store (config.*Ref)
+
+If you already run OpenClaw's secret system (`openclaw secrets configure`,
+`.secrets.providers` in openclaw.json), the skill hooks straight into it —
+one credential model for the whole instance, 1Password-style backends
+included. The `*Ref` keys accept the same shapes OpenClaw uses everywhere:
+a SecretRef object `{source, provider, id}` or a `$NAME` / `${NAME}` env
+template.
+
+```json
+{ "skills": { "entries": { "cloud-backup": { "config": {
+  "accessKeyRef":  { "source": "file", "provider": "default", "id": "/cloudBackup/accessKeyId" },
+  "secretKeyRef":  { "source": "file", "provider": "default", "id": "/cloudBackup/secretAccessKey" },
+  "passphraseRef": { "source": "file", "provider": "default", "id": "/cloudBackup/gpgPassphrase" }
+} } } } }
+```
+
+Supported sources (resolved with the gateway's own semantics):
+
+- **file** — provider `{source: "file", path, mode: "json"|"singleValue"}`;
+  in json mode (the default) `id` is a JSON pointer into the chmod-600 store
+  file, e.g. `/cloudBackup/gpgPassphrase`.
+- **env** — `id` is the environment variable name.
+- **exec** — provider `{source: "exec", command, args?, jsonOnly?}`; the
+  skill speaks the protocolVersion-1 contract (request object on stdin,
+  `values` map on stdout), so the same resolver you use for the gateway —
+  e.g. a 1Password `op read` wrapper — works unchanged. Plugin-integration
+  exec providers resolve only inside the gateway and are rejected with a
+  clear error.
+
+Notes:
+
+- Configured refs that fail to resolve abort instead of falling back;
+  `status` shows `UNRESOLVABLE` with the reason.
+- Archive-scope trade-off: a file-provider store under `~/.openclaw` travels
+  inside every (encrypted) archive; an AWS profile never travels at all.
+  Both are fine — just know which you picked.
+- A literal secret string in a `*Ref` key technically works but is plaintext
+  in config — the sensitivity verdict will flag it. Use a real ref.
 
 ## Generating a passphrase
 

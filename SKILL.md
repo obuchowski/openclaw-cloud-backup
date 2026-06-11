@@ -106,8 +106,12 @@ Resolution order and storage rules: `references/credentials.md`. Hard rules:
   credential in config is carried inside every archive it protects.
 - S3 credentials live in an AWS named profile (`config.profile`, recommended)
   or operator-managed process env. The passphrase lives in a chmod-600
-  passphrase file (`config.passphraseFile`) or an OpenClaw SecretRef via the
-  skill's `apiKey` (injected as `CLOUD_BACKUP_GPG_PASSPHRASE`).
+  passphrase file (`config.passphraseFile`).
+- Operators who run OpenClaw's secret store can point the skill at it
+  instead: `config.accessKeyRef` / `config.secretKeyRef` /
+  `config.passphraseRef` accept OpenClaw SecretRefs ({source: env|file|exec})
+  resolved against `.secrets.providers` — including 1Password-style exec
+  providers. Configured-but-broken refs abort the run; they never fall back.
 - Prefer flows where the secret never appears in this conversation: the user
   runs `aws configure --profile ...` and the passphrase generator themselves.
 - If the script prints a DEPRECATED warning about plaintext config
