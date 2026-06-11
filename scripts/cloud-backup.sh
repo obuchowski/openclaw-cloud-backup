@@ -31,8 +31,11 @@ DEFAULT_EXCLUDES=(
   "agents/*/agent/codex-home/logs_*.sqlite*"
   "agents/*/agent/codex-home/cache/**"
   "agents/*/agent/codex-home/skills/**"
+  "agents/*/agent/codex-home/.tmp/**"
   "agents/*/agent/codex-home/models_cache.json"
+  "agents/*/agent/codex-home/sessions/**"
   "agents/*/sessions/**"
+  "archive/**"
   "tools/**"
   "media/**"
   "logs/**"
@@ -44,14 +47,16 @@ DEFAULT_EXCLUDES=(
   "openclaw.json.bak*"
   "openclaw.json.clobbered*"
   "*.bak"
+  "*.bak.*"
   "**/*.bak"
+  "**/*.bak.*"
   "migration-backup-*/**"
 )
 # Enforced even with --everything: never swallow archives into archives.
 NONNEGOTIABLE_EXCLUDES=("backups/**")
 
 # --- output helpers -----------------------------------------------------------
-info() { echo ":: $*"; }
+info() { if [ "${JSON_OUT:-false}" = "true" ]; then echo ":: $*" >&2; else echo ":: $*"; fi; }
 warn() { echo "WARN: $*" >&2; WARNINGS+=("$*"); }
 err()  { echo "ERROR: $*" >&2; }
 fail() { local code="$1"; shift; err "$*"; exit "$code"; }
@@ -440,7 +445,15 @@ apply_lean_filter() {
   elif has gtar && gtar --version 2>/dev/null | grep -qi 'gnu tar'; then gnu=gtar; fi
 
   if [ -n "$gnu" ]; then
-    if ! gzip -dc "$arc" | "$gnu" --delete --files-from="$dl" -f - | gzip -c > "$arc.lean"; then
+    # GNU tar --delete removes PAX long-name members correctly but mis-marks
+    # them in its "found" bookkeeping, yielding spurious "Not found in archive"
+    # errors and exit 2. Don't trust the exit code: require zcat/gzip success,
+    # surface only non-spurious stderr, and prove correctness below by exact
+    # entry count.
+    gzip -dc "$arc" | "$gnu" --delete --no-wildcards --files-from="$dl" -f - 2>"$STAGING/delete.err" | gzip -c > "$arc.lean"
+    local rcs=("${PIPESTATUS[@]}")
+    grep -Ev 'Not found in archive|Exiting with failure status' "$STAGING/delete.err" >&2 || true
+    if [ "${rcs[0]}" -ne 0 ] || [ "${rcs[2]}" -ne 0 ]; then
       rm -f "$arc.lean"; return 1
     fi
   elif has bsdtar; then
@@ -452,6 +465,14 @@ apply_lean_filter() {
     warn "no GNU tar (or gtar/bsdtar) available to filter the archive — keeping the unfiltered archive (install gnu-tar to enable lean backups)"
     FILTERED_COUNT=0
     return 0
+  fi
+
+  local expected actual
+  expected=$(( $(wc -l < "$members") - FILTERED_COUNT ))
+  actual="$(tar -tzf "$arc.lean" | wc -l | tr -d ' ')"
+  if [ "$actual" -ne "$expected" ]; then
+    err "filtered archive has $actual entries, expected $expected — keeping nothing"
+    rm -f "$arc.lean"; return 1
   fi
   mv -f "$arc.lean" "$arc"
 }
@@ -624,8 +645,11 @@ cmd_backup() {
     return 0
   fi
 
-  sweep_stale_staging
+  # Lock BEFORE sweeping: a previous run's child (e.g. openclaw backup create)
+  # may have survived its parent and still hold the inherited lock fd while
+  # writing into its staging dir — never sweep under live work.
   acquire_lock
+  sweep_stale_staging
   preflight "$mode" "$do_upload"
   new_staging
 
