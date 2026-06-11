@@ -346,6 +346,7 @@ secrets_verdict() {
   n_plain="$(jq '[.. | objects | to_entries[]
       | select(.value | type == "string")
       | select(.key | test("(?i)(token|secret|password|passphrase|api[-_]?key|access[-_]?key)"))
+      | select(.key | test("(?i)(file|path|dir)$") | not)
       | select(.value | test("^\\$") | not)
       | select(.value | length > 0)] | length' "$CONFIG_FILE" 2>/dev/null || echo 0)"
   local n_skill_env
