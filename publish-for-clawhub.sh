@@ -13,6 +13,10 @@ mkdir -p "$OUT"
 cp "$REPO_ROOT/SKILL.md" "$OUT/"
 cp -r "$REPO_ROOT/scripts" "$OUT/scripts"
 cp -r "$REPO_ROOT/references" "$OUT/references"
+# Ship the remediation map and changelog with the package: the clawscan note
+# references SECURITY.md, so the scanner must find it inside the bundle.
+cp "$REPO_ROOT/SECURITY.md" "$OUT/"
+cp "$REPO_ROOT/CHANGELOG.md" "$OUT/"
 
 echo "Created: $OUT"
 ls -R "$OUT"
