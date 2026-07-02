@@ -32,7 +32,7 @@ transit the chat.**
 
 | Mode | Includes | Excludes by default | Sensitivity |
 |---|---|---|---|
-| `backup full` (default) | config, credentials, secret stores, state + agent SQLite snapshots, agent memory, workspace, skills | session transcripts, codex caches/logs, tools/, media/, logs/, old backups | encryption forced |
+| `backup full` (default) | config, credentials, secret stores, state + agent SQLite snapshots, agent memory, workspace, skills | session transcripts, codex caches/logs, qmd embedding caches, tools/, media/, logs/, old backups | encryption forced |
 | `backup full --everything` | all of the above PLUS transcripts and codex history | previous backup archives | encryption forced |
 | `backup settings` | config, secret stores, credentials, auth files | everything else | always encrypted |
 | `backup workspace` | workspace dirs (skills, memory files) | all state/config | encrypted by default |
